@@ -18,5 +18,8 @@
   "bugs": {
     "url": "https://github.com/Xbaal/simplex-3d/issues"
   },
-  "homepage": "https://github.com/Xbaal/simplex-3d#readme"
+  "homepage": "https://github.com/Xbaal/simplex-3d#readme",
+  "devDependencies": {
+    "webpack": "^1.14.0"
+  }
 }
