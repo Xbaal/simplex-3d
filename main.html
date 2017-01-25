@@ -193,7 +193,8 @@
         polyhedron.add( edgeMesh );
 
         // convert face data to a single (triangulated) geometry
-        var faceMaterial = new THREE.MeshBasicMaterial( { color: 0xffffff, side: THREE.DoubleSide, transparent:true, opacity:0.5 } );
+        var frontFaceMaterial = new THREE.MeshBasicMaterial( { color: 0xffffff, side: THREE.FrontSide, transparent: true, opacity:0.5 } );
+        var backFaceMaterial = new THREE.MeshBasicMaterial( { color: 0xffffff, side: THREE.BackSide, transparent: true, opacity:0.5 } );
 
         var geometry = new THREE.Geometry();
         geometry.vertices = vertex;
@@ -209,11 +210,14 @@
         }
 
         //TODO: think about necessity (?)
-        geometry.computeFaceNormals();
-        geometry.computeVertexNormals();
+        //geometry.computeFaceNormals();
+        //geometry.computeVertexNormals();
 
-        faces = new THREE.Mesh(geometry, faceMaterial);
-        polyhedron.add(faces);
+        //backSides have to be added first (or render order has to be tweaked)
+        backFace = new THREE.Mesh(geometry, backFaceMaterial);
+        polyhedron.add(backFace);
+        frontFace = new THREE.Mesh(geometry, frontFaceMaterial);
+        polyhedron.add(frontFace);
 
         return polyhedron;
       }
