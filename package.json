@@ -13,6 +13,9 @@
   "keywords": [
     "simplex"
   ],
+  "scripts": {
+    "build": "webpack"
+  },
   "author": "Konrad Becker",
   "license": "ISC",
   "bugs": {
