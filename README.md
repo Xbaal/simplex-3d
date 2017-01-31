@@ -1,4 +1,4 @@
-## What is this?
+## What is this about?
 This repository contains the code which i write during my bachelor thesis with the topic "3D visualization of the simplex algorithm".
 
 ## Is there some webpage which runs this code?
