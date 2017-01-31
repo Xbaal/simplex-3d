@@ -9,7 +9,7 @@
     "camelcase": 2,
     "comma-dangle": 2,
     "comma-style": 2,
-    "complexity": [2, 5],
+    "complexity": [0, 5],
     "constructor-super": 2,
     "dot-notation": 2,
     "eqeqeq": 2,
@@ -18,14 +18,14 @@
     "key-spacing": 2,
     "keyword-spacing": 2,
     "linebreak-style": 2,
-    "max-len": [2, 120],
+    "max-len": [2, 130],
     "new-parens": 2,
     "no-alert": 2,
     "no-caller": 2,
     "no-case-declarations": 2,
     "no-class-assign": 2,
     "no-cond-assign": 2,
-    "no-console": 2,
+    "no-console": 0,
     "no-constant-condition": 2,
     "no-const-assign": 2,
     "no-control-regex": 2,
@@ -71,10 +71,10 @@
     "no-unsafe-finally": 2,
     "no-unused-labels": 2,
     "no-unused-vars": 2,
-    "no-var": 2,
+    "no-var": 0,
     "object-curly-spacing": [2, "always"],
     "object-shorthand": 2,
-    "prefer-arrow-callback": 2,
+    "prefer-arrow-callback": 0,
     "prefer-rest-params": 2,
     "quotes": [2, "double"],
     "require-yield": 2,
@@ -88,13 +88,11 @@
   "env": {
     "browser": true
   },
-  "ecmaFeatures": {
-    "modules": true
-  },
-  "parserOptions": {
-    "sourceType": "module",
-    "ecmaVersion": 6
-  },
   "globals": {
+    "Stats": true,
+    "THREE": true,
+    "Detector": true,
+    "THREEx": true,
+    "MODELS": true
   }
 }

@@ -1,6 +1,4 @@
-import "JSON!models.json";
-
-let camera, controls, scene, renderer, domEvents, stats;
+var camera, controls, scene, renderer, domEvents, stats;
 
 init();
 animate();
@@ -21,128 +19,158 @@ function init() {
   camera.lookAt(scene.position);
   // RENDERER
   if ( Detector.webgl )
-    renderer = new THREE.WebGLRenderer( {antialias:true} );
+    renderer = new THREE.WebGLRenderer({ antialias: true });
   else //TODO: make the CanvasRenderer work properly or remove it
     renderer = new THREE.CanvasRenderer();
   renderer.setSize(SCREEN_WIDTH, SCREEN_HEIGHT);
-  container = document.getElementById( 'ThreeJS' );
+  var container = document.getElementById( "ThreeJS" );
   container.appendChild( renderer.domElement );
   // EVENTS
-  domEvents = new THREEx.DomEvents(camera, renderer.domElement)
+  domEvents = new THREEx.DomEvents(camera, renderer.domElement);
   //THREEx.WindowResize(renderer, camera);
   // CONTROLS
   controls = new THREE.TrackballControls( camera, renderer.domElement );
   controls.noPan = true;
   // LIGHT
-  light = new THREE.AmbientLight( 0x222222 , 7);
-  scene.add( light );
+  scene.add( new THREE.AmbientLight( 0x222222 , 7) );
   // SKYBOX
-  let skyBoxGeometry = new THREE.CubeGeometry( 8000, 8000, 8000 );
-  let skyBoxMaterial = new THREE.MeshBasicMaterial( { color: 0xccccff, side: THREE.BackSide } );
-  let skyBox = new THREE.Mesh( skyBoxGeometry, skyBoxMaterial );
+  var skyBoxGeometry = new THREE.CubeGeometry( 8000, 8000, 8000 );
+  var skyBoxMaterial = new THREE.MeshBasicMaterial( { color: 0xccccff, side: THREE.BackSide } );
+  var skyBox = new THREE.Mesh( skyBoxGeometry, skyBoxMaterial );
   scene.add(skyBox);
 
-
-  function displayPolyhedron(data) {
-    polyhedronMesh = polyhedronDataToMesh(data);
-    scene.add(polyhedronMesh);
-  }
-
-
-  displayPolyhedron(MODELS.Cube)
-
-
-
-
-
-  window.addEventListener( 'resize', onWindowResize, false );
+  window.addEventListener( "resize", onWindowResize, false );
 
 }
 
-function loadJSON(url) {
-
+function displayPolyhedron(data) {
+  var polyhedronMesh = polyhedronDataToMesh(data);
+  scene.add(polyhedronMesh);
 }
 
-function cylinderMesh(point1, point2, material)
-{
-  var direction = new THREE.Vector3().subVectors(point2, point1);
-  var arrow = new THREE.ArrowHelper(direction.clone().normalize(), point1);
+var frontFaceMaterial = new THREE.MeshBasicMaterial(
+  { color: 0xffffff, side: THREE.FrontSide, transparent: true, opacity: 0.5 }
+);
+var backFaceMaterial = new THREE.MeshBasicMaterial(
+  { color: 0xffffff, side: THREE.BackSide, transparent: true, opacity: 0.5 }
+);
+
+function Vertex(vector, id) {
+  THREE.Mesh.call(this, this.geometry, this.standardMaterial);
+  var v = this;
+  v.vertexId = id;
+  v.position.add(vector);
+  domEvents.addEventListener(v, "click", function() {
+    console.log(v.vertexId);
+    v.scale.multiplyScalar(2);
+    setTimeout(function() {
+      v.scale.multiplyScalar(0.5);
+    },2000);
+  }, false);
+  //mousemove is here not really useful like this...
+  domEvents.addEventListener(v, "mouseover", function() {
+    v.material = v.hoverMaterial;
+  }, false);
+  domEvents.addEventListener(v, "mouseout", function() {
+    v.material = v.standardMaterial;
+  });
+  domEvents.addEventListener(v, "contextmenu", function() {
+    if (v.material === v.standardMaterial) {
+      v.material = v.hoverMaterial;
+    } else {
+      v.material = v.standardMaterial;
+    }
+  }, false);
+}
+Vertex.prototype = Object.create(THREE.Mesh.prototype);
+Vertex.prototype.constructor = Vertex;
+Object.assign(Vertex.prototype, {
+  geometry: new THREE.SphereGeometry( 6, 12, 6 ),
+  standardMaterial: new THREE.MeshLambertMaterial({ color: 0x222244 }),
+  hoverMaterial: new THREE.MeshLambertMaterial({ color: 0x662222 })
+});
+
+function Edge(vertex1, vertex2) {
+  var direction = new THREE.Vector3().subVectors(vertex2.position, vertex1.position);
+  var arrow = new THREE.ArrowHelper(direction.clone().normalize(), vertex1.position);
   var edgeGeometry = new THREE.CylinderGeometry( 2, 2, direction.length(), 8, 4 );
-  var edge = new THREE.Mesh(edgeGeometry, material);
-  edge.position.addVectors(point1, direction.multiplyScalar(0.5));
+  THREE.Mesh.call(this,edgeGeometry,this.standardMaterial);
+  var edge = this;
+  edge.position.addVectors(vertex1.position, direction.multiplyScalar(0.5));
   edge.rotation.setFromQuaternion(arrow.quaternion);
-  return edge;
-
   // the result should align with:
-  //   scene.add( new THREE.ArrowHelper( direction.clone().normalize(), point1, direction.length()) );
+  //   scene.add( new THREE.ArrowHelper( direction.clone().normalize(), vertex1.position, direction.length()) );
+  domEvents.addEventListener(edge, "mouseover", function() {
+    edge.material = edge.hoverMaterial;
+  }, false);
+  domEvents.addEventListener(edge, "mouseout", function() {
+    edge.material = edge.standardMaterial;
+  });
 }
+Edge.prototype = Object.create(THREE.Mesh.prototype);
+Edge.prototype.constructor = Edge;
+Object.assign(Edge.prototype, {
+  standardMaterial: new THREE.MeshLambertMaterial({ color: 0x666666 }),
+  hoverMaterial: new THREE.MeshLambertMaterial({ color: 0xcccccc })
+});
 
-function polyhedronDataToMesh(data)
-{
+function Face(vertices) {
+  var geometry = new THREE.Geometry();
+  geometry.vertices = vertices.map(function(v) {
+    return v.position;
+  });
+  for (var i = 0; i < vertices.length - 2; i++) {
+    var f = new THREE.Face3( 0, i + 1, i + 2 );
+    f.color = 0xffffff;
+    geometry.faces.add(f);
+  }
+  THREE.Mesh.call(this, geometry, this.frontFaceMaterial);
+}
+Face.prototype = Object.create(THREE.Mesh.prototype);
+Face.prototype.constructor = Face;
+Object.assign(Face.prototype, {
+  frontFaceMaterial: new THREE.MeshBasicMaterial({ color: 0xffffff, side: THREE.FrontSide, transparent: true, opacity: 0.5 }),
+  backFaceMaterial: new THREE.MeshBasicMaterial({ color: 0xffffff, side: THREE.BackSide, transparent: true, opacity: 0.5 })
+});
+
+
+function polyhedronDataToMesh(data) {
+  var i;
   var polyhedron = new THREE.Object3D();
-
   // convert vertex data to THREE.js vectors
-  var vertex = []
-  for (var i = 0; i < data.vertex.length; i++)
-    vertex.push( new THREE.Vector3( data.vertex[i][0], data.vertex[i][1], data.vertex[i][2] ).multiplyScalar(100) );
 
-  var vertexGeometry = new THREE.SphereGeometry( 6, 12, 6 );
-  var vertexMaterial = new THREE.MeshLambertMaterial( { color: 0x222244 } );
-  var vertexHoverMaterial = new THREE.MeshLambertMaterial( { color: 0x662222 } );
-  var vertexSingleMesh = new THREE.Mesh( vertexGeometry, vertexMaterial );
-
-  for (var i = 0; i < data.vertex.length; i++)
-  {
-    let vMesh = vertexSingleMesh.clone();
-    vMesh.position.add(vertex[i]);
-    polyhedron.add( vMesh );
-    domEvents.addEventListener(vMesh, 'click', (mesh) => {
-      vMesh.scale.multiplyScalar(2)
-      setTimeout(() => {
-        vMesh.scale.multiplyScalar(0.5)
-      },2000)
-    }, false)
-    //mousemove is here not really useful like this...
-    domEvents.addEventListener(vMesh, 'mouseover', (event) => {
-      event.target.material = vertexHoverMaterial
-    }, false)
-    domEvents.addEventListener(vMesh, 'mouseout', (event) => {
-      event.target.material = vertexMaterial
-    })
-    domEvents.addEventListener(vMesh, 'contextmenu', (mesh) => {
-      if (vMesh.material == vertexMaterial) {
-        vMesh.material = vertexHoverMaterial
-      } else {
-        vMesh.material = vertexMaterial
-      }
-    }, false)
+  //TODO: consider removing multiplyScalar(100)
+  var vertices = [];
+  for (i = 0; i < data.vertex.length; i++) {
+    var vector = new THREE.Vector3( data.vertex[i][0], data.vertex[i][1], data.vertex[i][2] ).multiplyScalar(100);
+    var vertex = new Vertex(vector, i);
+    vertices.push( vertex );
+    polyhedron.add( vertex );
   }
 
-  // convert edge data to cylinders
-  var edgeMaterial = new THREE.MeshLambertMaterial( {color: 0x666666} );
-  var edgeAmalgam = new THREE.Geometry();
-  for (var i = 0; i < data.edge.length; i++)
-  {
+  var edges = [];
+  for (i = 0; i < data.edge.length; i++) {
     var index0 = data.edge[i][0];
     var index1 = data.edge[i][1];
-    var eMesh = cylinderMesh( vertex[index0], vertex[index1], edgeMaterial );
-    edgeAmalgam.mergeMesh( eMesh );
+    var edge = new Edge(vertices[index0], vertices[index1]);
+    edges.push( edge );
+    polyhedron.add( edge );
   }
-  var edgeMesh = new THREE.Mesh( edgeAmalgam, edgeMaterial );
-  polyhedron.add( edgeMesh );
 
   // convert face data to a single (triangulated) geometry
-  var frontFaceMaterial = new THREE.MeshBasicMaterial( { color: 0xffffff, side: THREE.FrontSide, transparent: true, opacity:0.5 } );
-  var backFaceMaterial = new THREE.MeshBasicMaterial( { color: 0xffffff, side: THREE.BackSide, transparent: true, opacity:0.5 } );
 
   var geometry = new THREE.Geometry();
-  geometry.vertices = vertex;
+  geometry.vertices = vertices.map(function(v) {
+    return v.position;
+  });
   var faceIndex = 0;
-  for (var faceNum = 0; faceNum < data.face.length; faceNum++)
-  {
-    for (var i = 0; i < data.face[faceNum].length - 2; i++)
-    {
-      geometry.faces[faceIndex] = new THREE.Face3( data.face[faceNum][0], data.face[faceNum][i+1], data.face[faceNum][i+2] );
+  for (var faceNum = 0; faceNum < data.face.length; faceNum++) {
+    for (i = 0; i < data.face[faceNum].length - 2; i++) {
+      geometry.faces[faceIndex] = new THREE.Face3(
+        data.face[faceNum][0],
+        data.face[faceNum][i + 1],
+        data.face[faceNum][i + 2]
+      );
       geometry.faces[faceIndex].color = 0xffffff;
       faceIndex++;
     }
@@ -153,20 +181,18 @@ function polyhedronDataToMesh(data)
   //geometry.computeVertexNormals();
 
   //backSides have to be added first (or render order has to be tweaked)
-  backFace = new THREE.Mesh(geometry, backFaceMaterial);
-  polyhedron.add(backFace);
-  frontFace = new THREE.Mesh(geometry, frontFaceMaterial);
-  polyhedron.add(frontFace);
+  polyhedron.add(new THREE.Mesh(geometry, backFaceMaterial));
+  polyhedron.add(new THREE.Mesh(geometry, frontFaceMaterial));
 
   return polyhedron;
 }
 
 function onWindowResize() {
 
-	camera.aspect = window.innerWidth / window.innerHeight;
-	camera.updateProjectionMatrix();
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
 
-	renderer.setSize( window.innerWidth, window.innerHeight );
+  renderer.setSize( window.innerWidth, window.innerHeight );
 
 }
 
@@ -178,18 +204,24 @@ function animate() {
   if (camera.position.length() > 500)
     camera.position.setLength(500);
 
-	requestAnimationFrame( animate );
+  requestAnimationFrame( animate );
 
-	controls.update(); // required if controls.enableDamping = true, or if controls.autoRotate = true
+  controls.update(); // required if controls.enableDamping = true, or if controls.autoRotate = true
 
-	stats.update();
+  stats.update();
 
-	render();
+  render();
 
 }
 
 function render() {
 
-	renderer.render( scene, camera );
+  renderer.render( scene, camera );
 
 }
+
+function loadJSON() {
+  displayPolyhedron(MODELS.Cube);
+}
+
+loadJSON();
