@@ -1,43 +1,43 @@
 <!DOCTYPE html>
 <html lang="en">
-	<head>
-		<title>Xbaal Simplex Test Area</title>
-		<meta charset="utf-8">
-		<meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
-		<style>
-			body {
-				color: #000;
-				font-family:Monospace;
-				font-size:13px;
-				text-align:center;
-				font-weight: bold;
+  <head>
+    <title>Xbaal Simplex Test Area</title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
+    <style>
+      body {
+        color: #000;
+        font-family:Monospace;
+        font-size:13px;
+        text-align:center;
+        font-weight: bold;
 
-				background-color: #fff;
-				margin: 0px;
-				overflow: hidden;
-			}
+        background-color: #fff;
+        margin: 0px;
+        overflow: hidden;
+      }
 
-			#info {
-				color:#000;
-				position: absolute;
-				top: 0px; width: 100%;
-				padding: 5px;
+      #info {
+        color:#000;
+        position: absolute;
+        top: 0px;
+        width: 100%;
+        padding: 5px;
+      }
 
-			}
+      a {
+        color: red;
+      }
+    </style>
+  </head>
 
-			a {
-				color: red;
-			}
-		</style>
-	</head>
-
-	<body>
-		<div id="ThreeJS"></div>
-		<div id="info">
-			Simplex Algorithm
+  <body>
+    <div id="ThreeJS"></div>
+    <div id="info">
+      Simplex Algorithm
       <br>
       <select id="model" onchange="displayPolyhedron()"></select>
-		</div>
+    </div>
 
     <!-- 3d library -->
     <script src="js/threejs/three.js"></script>
@@ -56,7 +56,7 @@
     <!-- TODO: use jquery directly from framework -->
     <script src="js/jquery-1.11.0.min.js"></script>
 
-		<script src="js/index.js"></script>
+    <script src="js/index.js"></script>
 
-	</body>
+  </body>
 </html>
