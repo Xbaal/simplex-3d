@@ -234,7 +234,6 @@ function loadMODELS(path) {
     Object.keys(MODELS).forEach(function(polyhedron){
       jQuery("#model").append("<option value='" + polyhedron + "'>" + polyhedron + "</option>");
     });
-    jQuery("#model").first().select();
     displayPolyhedron();
   });
 }
