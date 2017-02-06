@@ -1,5 +1,7 @@
 var camera, controls, scene, renderer, domEvents, stats;
 
+var MODELS = {};
+
 init();
 animate();
 
@@ -220,8 +222,11 @@ function render() {
 
 }
 
-function loadJSON() {
-  displayPolyhedron(MODELS.Cube);
+function loadMODELS(path) {
+  jQuery.getJSON(path, function (data){
+    MODELS = data;
+    displayPolyhedron(MODELS.Cube);
+  });
 }
 
-loadJSON();
+loadMODELS("js/models.json");

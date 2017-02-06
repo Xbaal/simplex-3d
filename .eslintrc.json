@@ -93,6 +93,7 @@
     "THREE": true,
     "Detector": true,
     "THREEx": true,
-    "MODELS": true
+    "MODELS": true,
+    "jQuery": true
   }
 }
