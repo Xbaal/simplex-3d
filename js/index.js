@@ -1,5 +1,6 @@
 var camera, controls, scene, renderer, domEvents, stats;
 
+var polyhedron;
 var MODELS = {};
 
 init();
@@ -45,9 +46,13 @@ function init() {
 
 }
 
-function displayPolyhedron(data) {
-  var polyhedronMesh = polyhedronDataToMesh(data);
-  scene.add(polyhedronMesh);
+function displayPolyhedron() {
+  var selectedModel = jQuery("#model").val();
+  if (MODELS[selectedModel]) {
+    if (polyhedron) scene.remove(polyhedron);
+    polyhedron = polyhedronDataToMesh(MODELS[selectedModel]);
+    scene.add( polyhedron );
+  }
 }
 
 var frontFaceMaterial = new THREE.MeshBasicMaterial(
@@ -225,7 +230,12 @@ function render() {
 function loadMODELS(path) {
   jQuery.getJSON(path, function (data){
     MODELS = data;
-    displayPolyhedron(MODELS.Cube);
+    jQuery("#model").empty();
+    Object.keys(MODELS).forEach(function(polyhedron){
+      jQuery("#model").append("<option value='" + polyhedron + "'>" + polyhedron + "</option>");
+    });
+    jQuery("#model").first().select();
+    displayPolyhedron();
   });
 }
 
