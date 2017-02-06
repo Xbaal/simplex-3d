@@ -55,13 +55,6 @@ function displayPolyhedron() {
   }
 }
 
-var frontFaceMaterial = new THREE.MeshBasicMaterial(
-  { color: 0xffffff, side: THREE.FrontSide, transparent: true, opacity: 0.5 }
-);
-var backFaceMaterial = new THREE.MeshBasicMaterial(
-  { color: 0xffffff, side: THREE.BackSide, transparent: true, opacity: 0.5 }
-);
-
 function Vertex(vector, id) {
   THREE.Mesh.call(this, this.geometry, this.standardMaterial);
   var v = this;
@@ -188,7 +181,13 @@ function polyhedronDataToMesh(data) {
   //geometry.computeVertexNormals();
 
   //backSides have to be added first (or render order has to be tweaked)
-  polyhedron.add(new THREE.Mesh(geometry, backFaceMaterial));
+  //var backFaceMaterial = new THREE.MeshBasicMaterial(
+  //  { color: 0xffffff, side: THREE.BackSide, transparent: true, opacity: 0.5 }
+  //);
+  //polyhedron.add(new THREE.Mesh(geometry, backFaceMaterial));
+  var frontFaceMaterial = new THREE.MeshBasicMaterial(
+    { color: 0xffffff, side: THREE.FrontSide, transparent: true, opacity: 0.5 }
+  );
   polyhedron.add(new THREE.Mesh(geometry, frontFaceMaterial));
 
   return polyhedron;
