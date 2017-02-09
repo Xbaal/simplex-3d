@@ -1,4 +1,4 @@
-var camera, controls, scene, renderer, domEvents, stats;
+var camera, controls, scene, renderer, domEvents, stats, light;
 
 var polyhedron;
 var MODELS = {};
@@ -21,10 +21,12 @@ function init() {
   camera.position.set(0,150,400);
   camera.lookAt(scene.position);
   // RENDERER
-  if ( Detector.webgl )
+  if ( Detector.webgl ) {
     renderer = new THREE.WebGLRenderer({ antialias: true });
-  else //TODO: make the CanvasRenderer work properly or remove it
+  } else {
+    //TODO: make the CanvasRenderer work properly or remove it
     renderer = new THREE.CanvasRenderer();
+  }
   renderer.setSize(SCREEN_WIDTH, SCREEN_HEIGHT);
   var container = document.getElementById( "ThreeJS" );
   container.appendChild( renderer.domElement );
@@ -35,7 +37,8 @@ function init() {
   controls = new THREE.TrackballControls( camera, renderer.domElement );
   controls.noPan = true;
   // LIGHT
-  scene.add( new THREE.AmbientLight( 0x222222 , 7) );
+  light = new THREE.AmbientLight( 0x222222 , 7);
+  scene.add( light );
   // SKYBOX
   var skyBoxGeometry = new THREE.CubeGeometry( 8000, 8000, 8000 );
   var skyBoxMaterial = new THREE.MeshBasicMaterial( { color: 0xccccff, side: THREE.BackSide } );
@@ -87,7 +90,7 @@ Vertex.prototype.constructor = Vertex;
 Object.assign(Vertex.prototype, {
   geometry: new THREE.SphereGeometry( 6, 12, 6 ),
   standardMaterial: new THREE.MeshLambertMaterial({ color: 0x222244 }),
-  hoverMaterial: new THREE.MeshLambertMaterial({ color: 0x662222 })
+  hoverMaterial: new THREE.MeshLambertMaterial({ color: 0xff2222 })
 });
 
 function Edge(vertex1, vertex2) {
@@ -98,8 +101,7 @@ function Edge(vertex1, vertex2) {
   var edge = this;
   edge.position.addVectors(vertex1.position, direction.multiplyScalar(0.5));
   edge.rotation.setFromQuaternion(arrow.quaternion);
-  // the result should align with:
-  //   scene.add( new THREE.ArrowHelper( direction.clone().normalize(), vertex1.position, direction.length()) );
+
   domEvents.addEventListener(edge, "mouseover", function() {
     edge.material = edge.hoverMaterial;
   }, false);
@@ -133,6 +135,15 @@ Object.assign(Face.prototype, {
   backFaceMaterial: new THREE.MeshBasicMaterial({ color: 0xffffff, side: THREE.BackSide, transparent: true, opacity: 0.5 })
 });
 
+/*
+//Arrows
+var dir = new THREE.Vector3( 1, 2, 0 );
+var origin = new THREE.Vector3( 100, 0, 0 );
+var length = 100;
+
+var arrowHelper = new THREE.ArrowHelper( dir.normalize(), origin, length, 0x222200 );
+scene.add( arrowHelper );
+*/
 
 function polyhedronDataToMesh(data) {
   var i;
