@@ -32,7 +32,6 @@ function init() {
   container.appendChild( renderer.domElement );
   // EVENTS
   domEvents = new THREEx.DomEvents(camera, renderer.domElement);
-  //THREEx.WindowResize(renderer, camera);
   // CONTROLS
   controls = new THREE.TrackballControls( camera, renderer.domElement );
   controls.noPan = true;
