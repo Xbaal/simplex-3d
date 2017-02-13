@@ -129,6 +129,7 @@ function Face(vertices) {
   geometry.computeFaceNormals();
   this.A = subFace.normal;
   this.b = this.A.dot(vertices[0].position);
+  console.log(this.A.x + "*x + " + this.A.y + "*y + " + this.A.z + "*z <= " + this.b);
   THREE.Mesh.call(this, geometry, this.frontFaceMaterial);
 }
 Face.prototype = Object.create(THREE.Mesh.prototype);
