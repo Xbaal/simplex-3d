@@ -115,15 +115,19 @@ Object.assign(Edge.prototype, {
 });
 
 function Face(vertices) {
+  //this class assumes, that the vertices are coplanar
   var geometry = new THREE.Geometry();
   geometry.vertices = vertices.map(function(v) {
     return v.position;
   });
+  var subFace;
   for (var i = 0; i < vertices.length - 2; i++) {
-    var f = new THREE.Face3( 0, i + 1, i + 2 );
-    f.color = 0xffffff;
-    geometry.faces.push(f);
+    subFace = new THREE.Face3( 0, i + 1, i + 2 );
+    subFace.color = 0xffffff;
+    geometry.faces.push(subFace);
   }
+  geometry.computeFaceNormals();
+  this.normal = subFace.normal;
   THREE.Mesh.call(this, geometry, this.frontFaceMaterial);
 }
 Face.prototype = Object.create(THREE.Mesh.prototype);
