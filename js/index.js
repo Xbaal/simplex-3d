@@ -10,7 +10,7 @@ function init() {
 
   //STATS
   stats = new Stats();
-  document.getElementById( "ThreeJS" ).appendChild(stats.dom);
+  document.getElementById("ThreeJS").appendChild(stats.dom);
   // SCENE
   scene = new THREE.Scene();
   // CAMERA
@@ -28,23 +28,23 @@ function init() {
     renderer = new THREE.CanvasRenderer();
   }
   renderer.setSize(SCREEN_WIDTH, SCREEN_HEIGHT);
-  var container = document.getElementById( "ThreeJS" );
-  container.appendChild( renderer.domElement );
+  var container = document.getElementById("ThreeJS");
+  container.appendChild(renderer.domElement);
   // EVENTS
   domEvents = new THREEx.DomEvents(camera, renderer.domElement);
   // CONTROLS
-  controls = new THREE.TrackballControls( camera, renderer.domElement );
+  controls = new THREE.TrackballControls(camera, renderer.domElement);
   controls.noPan = true;
   // LIGHT
-  light = new THREE.AmbientLight( 0x222222 , 7);
+  light = new THREE.AmbientLight(0x222222, 7);
   scene.add( light );
   // SKYBOX
-  var skyBoxGeometry = new THREE.CubeGeometry( 8000, 8000, 8000 );
-  var skyBoxMaterial = new THREE.MeshBasicMaterial( { color: 0xccccff, side: THREE.BackSide } );
-  var skyBox = new THREE.Mesh( skyBoxGeometry, skyBoxMaterial );
+  var skyBoxGeometry = new THREE.CubeGeometry(8000, 8000, 8000);
+  var skyBoxMaterial = new THREE.MeshBasicMaterial({ color: 0xccccff, side: THREE.BackSide });
+  var skyBox = new THREE.Mesh(skyBoxGeometry, skyBoxMaterial);
   scene.add(skyBox);
 
-  window.addEventListener( "resize", onWindowResize, false );
+  window.addEventListener("resize", onWindowResize, false);
 
 }
 
@@ -53,7 +53,7 @@ function displayPolyhedron() {
   if (MODELS[selectedModel]) {
     if (polyhedron) scene.remove(polyhedron);
     polyhedron = polyhedronDataToMesh(MODELS[selectedModel]);
-    scene.add( polyhedron );
+    scene.add(polyhedron);
   }
 }
 
@@ -69,7 +69,6 @@ function Vertex(vector, id) {
       v.scale.multiplyScalar(0.5);
     },2000);
   }, false);
-  //mousemove is here not really useful like this...
   domEvents.addEventListener(v, "mouseover", function() {
     v.material = v.hoverMaterial;
   }, false);
@@ -152,7 +151,7 @@ function polyhedronDataToMesh(data) {
   //TODO: consider removing multiplyScalar(100)
   var vertices = [];
   for (i = 0; i < data.vertex.length; i++) {
-    var vector = new THREE.Vector3( data.vertex[i][0], data.vertex[i][1], data.vertex[i][2] ).multiplyScalar(100);
+    var vector = new THREE.Vector3(data.vertex[i][0], data.vertex[i][1], data.vertex[i][2]).multiplyScalar(100);
     var vertex = new Vertex(vector, i);
     vertices.push(vertex);
     polyhedron.add(vertex);
@@ -192,10 +191,11 @@ function onWindowResize() {
 function animate() {
 
   //restrict zoom-range
-  if (camera.position.length() < 150)
+  if (camera.position.length() < 150) {
     camera.position.setLength(150);
-  if (camera.position.length() > 500)
+  } else if (camera.position.length() > 500) {
     camera.position.setLength(500);
+  }
 
   requestAnimationFrame( animate );
 
@@ -209,7 +209,7 @@ function animate() {
 
 function render() {
 
-  renderer.render( scene, camera );
+  renderer.render(scene, camera);
 
 }
 
