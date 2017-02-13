@@ -127,7 +127,8 @@ function Face(vertices) {
     geometry.faces.push(subFace);
   }
   geometry.computeFaceNormals();
-  this.normal = subFace.normal;
+  this.A = subFace.normal;
+  this.b = this.A.dot(vertices[0].position);
   THREE.Mesh.call(this, geometry, this.frontFaceMaterial);
 }
 Face.prototype = Object.create(THREE.Mesh.prototype);
