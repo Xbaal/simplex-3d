@@ -154,8 +154,8 @@ function polyhedronDataToMesh(data) {
   for (i = 0; i < data.vertex.length; i++) {
     var vector = new THREE.Vector3( data.vertex[i][0], data.vertex[i][1], data.vertex[i][2] ).multiplyScalar(100);
     var vertex = new Vertex(vector, i);
-    vertices.push( vertex );
-    polyhedron.add( vertex );
+    vertices.push(vertex);
+    polyhedron.add(vertex);
   }
 
   var edges = [];
@@ -163,8 +163,8 @@ function polyhedronDataToMesh(data) {
     var index0 = data.edge[i][0];
     var index1 = data.edge[i][1];
     var edge = new Edge(vertices[index0], vertices[index1]);
-    edges.push( edge );
-    polyhedron.add( edge );
+    edges.push(edge);
+    polyhedron.add(edge);
   }
 
   // convert face data to a single (triangulated) geometry
