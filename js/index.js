@@ -167,38 +167,15 @@ function polyhedronDataToMesh(data) {
     polyhedron.add(edge);
   }
 
-  // convert face data to a single (triangulated) geometry
-
-  var geometry = new THREE.Geometry();
-  geometry.vertices = vertices.map(function(v) {
-    return v.position;
-  });
-  var faceIndex = 0;
-  for (var faceNum = 0; faceNum < data.face.length; faceNum++) {
-    for (i = 0; i < data.face[faceNum].length - 2; i++) {
-      geometry.faces[faceIndex] = new THREE.Face3(
-        data.face[faceNum][0],
-        data.face[faceNum][i + 1],
-        data.face[faceNum][i + 2]
-      );
-      geometry.faces[faceIndex].color = 0xffffff;
-      faceIndex++;
-    }
+  var faces = [];
+  for (i = 0; i < data.face.length; i++) {
+    var v = data.face[i].map(function(index){
+      return vertices[index];
+    });
+    var face = new Face(v);
+    faces.push(face);
+    polyhedron.add(face);
   }
-
-  //TODO: think about necessity (?)
-  //geometry.computeFaceNormals();
-  //geometry.computeVertexNormals();
-
-  //backSides have to be added first (or render order has to be tweaked)
-  //var backFaceMaterial = new THREE.MeshBasicMaterial(
-  //  { color: 0xffffff, side: THREE.BackSide, transparent: true, opacity: 0.5 }
-  //);
-  //polyhedron.add(new THREE.Mesh(geometry, backFaceMaterial));
-  var frontFaceMaterial = new THREE.MeshBasicMaterial(
-    { color: 0xffffff, side: THREE.FrontSide, transparent: true, opacity: 0.5 }
-  );
-  polyhedron.add(new THREE.Mesh(geometry, frontFaceMaterial));
 
   return polyhedron;
 }
