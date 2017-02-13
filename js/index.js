@@ -52,7 +52,7 @@ function displayPolyhedron() {
   var selectedModel = jQuery("#model").val();
   if (MODELS[selectedModel]) {
     if (polyhedron) scene.remove(polyhedron);
-    polyhedron = polyhedronDataToMesh(MODELS[selectedModel]);
+    polyhedron = new Polyhedron(MODELS[selectedModel]);
     scene.add(polyhedron);
   }
 }
@@ -149,9 +149,10 @@ var arrowHelper = new THREE.ArrowHelper( dir.normalize(), origin, length, 0x2222
 scene.add( arrowHelper );
 */
 
-function polyhedronDataToMesh(data) {
+function Polyhedron(data) {
+  THREE.Object3D.call(this);
+
   var i;
-  var polyhedron = new THREE.Object3D();
   // convert vertex data to THREE.js vectors
 
   //TODO: consider removing multiplyScalar(100)
@@ -160,8 +161,9 @@ function polyhedronDataToMesh(data) {
     var vector = new THREE.Vector3(data.vertex[i][0], data.vertex[i][1], data.vertex[i][2]).multiplyScalar(100);
     var vertex = new Vertex(vector, i);
     vertices.push(vertex);
-    polyhedron.add(vertex);
+    this.add(vertex);
   }
+  this.vertices = vertices;
 
   var edges = [];
   for (i = 0; i < data.edge.length; i++) {
@@ -169,8 +171,9 @@ function polyhedronDataToMesh(data) {
     var index1 = data.edge[i][1];
     var edge = new Edge(vertices[index0], vertices[index1]);
     edges.push(edge);
-    polyhedron.add(edge);
+    this.add(edge);
   }
+  this.edges = edges;
 
   var faces = [];
   for (i = 0; i < data.face.length; i++) {
@@ -179,11 +182,16 @@ function polyhedronDataToMesh(data) {
     });
     var face = new Face(v);
     faces.push(face);
-    polyhedron.add(face);
+    this.add(face);
   }
-
-  return polyhedron;
+  this.faces = faces;
 }
+Polyhedron.prototype = Object.create(THREE.Object3D.prototype);
+Polyhedron.prototype.constructor = Polyhedron;
+Object.assign(Polyhedron.prototype, {
+  //empty class variables
+});
+
 
 function onWindowResize() {
 
