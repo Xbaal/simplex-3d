@@ -123,7 +123,7 @@ function Face(vertices) {
   for (var i = 0; i < vertices.length - 2; i++) {
     var f = new THREE.Face3( 0, i + 1, i + 2 );
     f.color = 0xffffff;
-    geometry.faces.add(f);
+    geometry.faces.push(f);
   }
   THREE.Mesh.call(this, geometry, this.frontFaceMaterial);
 }
