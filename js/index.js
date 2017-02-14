@@ -116,6 +116,7 @@ Object.assign(Edge.prototype, {
 
 function Face(vertices) {
   //this class assumes, that the vertices are coplanar
+  this.vertices = vertices;
   var geometry = new THREE.Geometry();
   geometry.vertices = vertices.map(function(v) {
     return v.position;
@@ -185,6 +186,7 @@ function Polyhedron(data) {
     this.add(face);
   }
   this.faces = faces;
+  console.log(this.adjacentFaces(this.vertices[0]));
 }
 Polyhedron.prototype = Object.create(THREE.Object3D.prototype);
 Polyhedron.prototype.constructor = Polyhedron;
