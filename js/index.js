@@ -189,7 +189,24 @@ function Polyhedron(data) {
 Polyhedron.prototype = Object.create(THREE.Object3D.prototype);
 Polyhedron.prototype.constructor = Polyhedron;
 Object.assign(Polyhedron.prototype, {
-  //empty class variables
+  sharedVertices: function(faces) {
+    var count = {};
+    faces.forEach(function(face){
+      face.vertices.forEach(function(vertex){
+        count[vertex.vertexId] = (count[vertex.vertexId] || 0) + 1;
+      });
+    });
+    return Object.keys(count).filter(function(vertexId){
+      return count[vertexId] === faces.length;
+    });
+  },
+  adjacentFaces: function(vertex) {
+    return this.faces.filter(function(face){
+      return face.vertices.some(function(v){
+        return v === vertex;
+      });
+    });
+  }
 });
 
 
