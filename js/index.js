@@ -121,39 +121,38 @@ function Face(vertices, normal) {
   geometry.vertices = vertices.map(function(v) {
     return v.position;
   });
-  if (vertices.length < 3) {
-    if (!normal) {
-      throw new Error("Faces with less than 3 vertices must have a normal defined!");
-    } else {
-      if (normal instanceof Array) {
-        normal = new THREE.Vector3(normal[0], normal[1], normal[2]);
-      }
-    }
-
-    if (vertices.length === 2) {
-      var edgeLength = vertices[0].position.distanceTo( vertices[1].position );
-      console.log(edgeLength);
-      geometry = new THREE.PlaneGeometry( 100 + edgeLength + 100, 100 );
-      THREE.Mesh.call(this, geometry, this.planeMaterial);
-      this.position.addVectors( vertices[0].position, vertices[1].position ).multiplyScalar( .5 );
-    } else {
-      geometry = new THREE.PlaneGeometry( 100, 100 );
-      THREE.Mesh.call(this, geometry, this.planeMaterial);
-      this.position.add( vertices[0].position );
-    }
+  if (!normal && vertices.length < 3) {
+    throw new Error("Faces with less than 3 vertices must have a normal defined!");
+  }
+  if (normal instanceof Array) {
+    normal = new THREE.Vector3(normal[0], normal[1], normal[2]);
+  }
+  if (vertices.length === 1) {
+    geometry = new THREE.PlaneGeometry( 100, 100 );
+    THREE.Mesh.call( this, geometry, this.planeMaterial );
+    this.position.add( vertices[0].position );
     this.lookAt(normal);
-  } else {
+  }
+  if (vertices.length === 2) {
+    var edgeLength = vertices[0].position.distanceTo( vertices[1].position );
+    console.log(edgeLength);
+    geometry = new THREE.PlaneGeometry( 100 + edgeLength + 100, 100 );
+    THREE.Mesh.call(this, geometry, this.planeMaterial);
+    this.position.addVectors( vertices[0].position, vertices[1].position ).multiplyScalar( .5 );
+    this.lookAt(normal);
+  }
+  if (vertices.length >= 3) {
     var subFace;
     for (var i = 0; i < vertices.length - 2; i++) {
       subFace = new THREE.Face3( 0, i + 1, i + 2 );
-      subFace.color = new THREE.Color(0xffffff);
+      subFace.color = new THREE.Color( 0xffffff );
       geometry.faces.push(subFace);
     }
     geometry.computeFaceNormals();
     this.a = normal || subFace.normal;
-    this.b = this.a.dot(vertices[0].position);
+    this.b = this.a.dot( vertices[0].position );
     console.log(this.a.x + "*x + " + this.a.y + "*y + " + this.a.z + "*z <= " + this.b);
-    THREE.Mesh.call(this, geometry, this.frontFaceMaterial);
+    THREE.Mesh.call( this, geometry, this.frontFaceMaterial );
   }
 }
 Face.prototype = Object.create(THREE.Mesh.prototype);
