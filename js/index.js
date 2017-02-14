@@ -123,7 +123,7 @@ function Face(vertices) {
   var subFace;
   for (var i = 0; i < vertices.length - 2; i++) {
     subFace = new THREE.Face3( 0, i + 1, i + 2 );
-    subFace.color = 0xffffff;
+    subFace.color = new THREE.Color( 0xffffff );
     geometry.faces.push(subFace);
   }
   geometry.computeFaceNormals();
