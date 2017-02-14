@@ -52,7 +52,7 @@ function displayPolyhedron() {
   var selectedModel = jQuery("#model").val();
   if (MODELS[selectedModel]) {
     if (polyhedron) scene.remove(polyhedron);
-    polyhedron = polyhedronDataToMesh(MODELS[selectedModel]);
+    polyhedron = new Polyhedron(MODELS[selectedModel]);
     scene.add(polyhedron);
   }
 }
@@ -114,29 +114,54 @@ Object.assign(Edge.prototype, {
   hoverMaterial: new THREE.MeshLambertMaterial({ color: 0xcccccc })
 });
 
-function Face(vertices) {
+function Face(vertices, normal) {
   //this class assumes, that the vertices are coplanar
+  this.vertices = vertices;
   var geometry = new THREE.Geometry();
   geometry.vertices = vertices.map(function(v) {
     return v.position;
   });
-  var subFace;
-  for (var i = 0; i < vertices.length - 2; i++) {
-    subFace = new THREE.Face3( 0, i + 1, i + 2 );
-    subFace.color = 0xffffff;
-    geometry.faces.push(subFace);
+  if (vertices.length < 3) {
+    if (!normal) {
+      throw new Error("Faces with less than 3 vertices must have a normal defined!");
+    } else {
+      if (normal instanceof Array) {
+        normal = new THREE.Vector3(normal[0], normal[1], normal[2]);
+      }
+    }
+
+    if (vertices.length === 2) {
+      var edgeLength = vertices[0].position.distanceTo( vertices[1].position );
+      console.log(edgeLength);
+      geometry = new THREE.PlaneGeometry( 100 + edgeLength + 100, 100 );
+      THREE.Mesh.call(this, geometry, this.planeMaterial);
+      this.position.addVectors( vertices[0].position, vertices[1].position ).multiplyScalar( .5 );
+    } else {
+      geometry = new THREE.PlaneGeometry( 100, 100 );
+      THREE.Mesh.call(this, geometry, this.planeMaterial);
+      this.position.add( vertices[0].position );
+    }
+    this.lookAt(normal);
+  } else {
+    var subFace;
+    for (var i = 0; i < vertices.length - 2; i++) {
+      subFace = new THREE.Face3( 0, i + 1, i + 2 );
+      subFace.color = new THREE.Color(0xffffff);
+      geometry.faces.push(subFace);
+    }
+    geometry.computeFaceNormals();
+    this.a = normal || subFace.normal;
+    this.b = this.a.dot(vertices[0].position);
+    console.log(this.a.x + "*x + " + this.a.y + "*y + " + this.a.z + "*z <= " + this.b);
+    THREE.Mesh.call(this, geometry, this.frontFaceMaterial);
   }
-  geometry.computeFaceNormals();
-  this.A = subFace.normal;
-  this.b = this.A.dot(vertices[0].position);
-  console.log(this.A.x + "*x + " + this.A.y + "*y + " + this.A.z + "*z <= " + this.b);
-  THREE.Mesh.call(this, geometry, this.frontFaceMaterial);
 }
 Face.prototype = Object.create(THREE.Mesh.prototype);
 Face.prototype.constructor = Face;
 Object.assign(Face.prototype, {
   frontFaceMaterial: new THREE.MeshBasicMaterial({ color: 0xffffff, side: THREE.FrontSide, transparent: true, opacity: 0.5 }),
-  backFaceMaterial: new THREE.MeshBasicMaterial({ color: 0xffffff, side: THREE.BackSide, transparent: true, opacity: 0.5 })
+  backFaceMaterial: new THREE.MeshBasicMaterial({ color: 0xffffff, side: THREE.BackSide, transparent: true, opacity: 0.5 }),
+  planeMaterial: new THREE.MeshBasicMaterial({ color: 0xffffff, side: THREE.DoubleSide, transparent: true, opacity: 0.5 })
 });
 
 /*
@@ -149,9 +174,12 @@ var arrowHelper = new THREE.ArrowHelper( dir.normalize(), origin, length, 0x2222
 scene.add( arrowHelper );
 */
 
-function polyhedronDataToMesh(data) {
+function Polyhedron(data) {
+  THREE.Object3D.call(this);
+  if (typeof data.normal !== "object") {
+    data.normal = {};
+  }
   var i;
-  var polyhedron = new THREE.Object3D();
   // convert vertex data to THREE.js vectors
 
   //TODO: consider removing multiplyScalar(100)
@@ -160,8 +188,9 @@ function polyhedronDataToMesh(data) {
     var vector = new THREE.Vector3(data.vertex[i][0], data.vertex[i][1], data.vertex[i][2]).multiplyScalar(100);
     var vertex = new Vertex(vector, i);
     vertices.push(vertex);
-    polyhedron.add(vertex);
+    this.add(vertex);
   }
+  this.vertices = vertices;
 
   var edges = [];
   for (i = 0; i < data.edge.length; i++) {
@@ -169,21 +198,44 @@ function polyhedronDataToMesh(data) {
     var index1 = data.edge[i][1];
     var edge = new Edge(vertices[index0], vertices[index1]);
     edges.push(edge);
-    polyhedron.add(edge);
+    this.add(edge);
   }
+  this.edges = edges;
 
   var faces = [];
   for (i = 0; i < data.face.length; i++) {
     var v = data.face[i].map(function(index){
       return vertices[index];
     });
-    var face = new Face(v);
+    var face = new Face(v, data.normal[i]);
     faces.push(face);
-    polyhedron.add(face);
+    this.add(face);
   }
-
-  return polyhedron;
+  this.faces = faces;
 }
+Polyhedron.prototype = Object.create(THREE.Object3D.prototype);
+Polyhedron.prototype.constructor = Polyhedron;
+Object.assign(Polyhedron.prototype, {
+  sharedVertices: function(faces) {
+    var count = {};
+    faces.forEach(function(face){
+      face.vertices.forEach(function(vertex){
+        count[vertex.vertexId] = (count[vertex.vertexId] || 0) + 1;
+      });
+    });
+    return Object.keys(count).filter(function(vertexId){
+      return count[vertexId] === faces.length;
+    });
+  },
+  adjacentFaces: function(vertex) {
+    return this.faces.filter(function(face){
+      return face.vertices.some(function(v){
+        return v === vertex;
+      });
+    });
+  }
+});
+
 
 function onWindowResize() {
 
