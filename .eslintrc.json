@@ -94,6 +94,7 @@
     "Detector": true,
     "THREEx": true,
     "MODELS": true,
-    "jQuery": true
+    "jQuery": true,
+    "_": true
   }
 }
