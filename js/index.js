@@ -49,7 +49,7 @@ function init() {
 }
 
 function displayPolyhedron() {
-  var selectedModel = jQuery("#model").val();
+  var selectedModel = $("#model").val();
   if (MODELS[selectedModel]) {
     if (polyhedron) scene.remove(polyhedron);
     polyhedron = new Polyhedron(MODELS[selectedModel]);
@@ -271,11 +271,11 @@ function render() {
 }
 
 function loadMODELS(path) {
-  jQuery.getJSON(path, function (data){
+  $.getJSON(path, function (data){
     MODELS = data;
-    jQuery("#model").empty();
+    $("#model").empty();
     Object.keys(MODELS).forEach(function(polyhedron){
-      jQuery("#model").append("<option value='" + polyhedron + "'>" + polyhedron + "</option>");
+      $("#model").append("<option value='" + polyhedron + "'>" + polyhedron + "</option>");
     });
     displayPolyhedron();
   });
