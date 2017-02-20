@@ -59,64 +59,95 @@ function displayPolyhedron() {
 
 function Vertex(vector, id) {
   THREE.Mesh.call(this, this.geometry, this.standardMaterial);
+  this.status = {
+    hover: false,
+    active: false
+  };
+  this.vertexId = id;
+  this.position.add(vector);
   var v = this;
-  v.vertexId = id;
-  v.position.add(vector);
   domEvents.addEventListener(v, "click", function() {
-    console.log(v.vertexId);
-    v.scale.multiplyScalar(2);
-    setTimeout(function() {
-      v.scale.multiplyScalar(0.5);
-    },2000);
+    v.setStatus( "active", !v.status.active );
   }, false);
   domEvents.addEventListener(v, "mouseover", function() {
-    v.material = v.hoverMaterial;
+    v.setStatus( "hover", true );
   }, false);
   domEvents.addEventListener(v, "mouseout", function() {
-    v.material = v.standardMaterial;
+    v.setStatus( "hover", false );
   });
-  domEvents.addEventListener(v, "contextmenu", function() {
-    if (v.material === v.standardMaterial) {
-      v.material = v.hoverMaterial;
-    } else {
-      v.material = v.standardMaterial;
-    }
-  }, false);
 }
 Vertex.prototype = Object.create(THREE.Mesh.prototype);
 Vertex.prototype.constructor = Vertex;
 Object.assign(Vertex.prototype, {
   geometry: new THREE.SphereGeometry( 6, 12, 6 ),
   standardMaterial: new THREE.MeshLambertMaterial({ color: 0x222244 }),
-  hoverMaterial: new THREE.MeshLambertMaterial({ color: 0xff2222 })
+  hoverMaterial: new THREE.MeshLambertMaterial({ color: 0x444488 }),
+  activeMaterial: new THREE.MeshLambertMaterial({ color: 0xff0000 }),
+  setStatus: function (attribute, status) {
+    this.status[attribute] = Boolean(status);
+    this.updateMaterial();
+  },
+  updateMaterial: function() {
+    if (this.status.active) {
+      this.material = this.activeMaterial;
+    } else if (this.status.hover) {
+      this.material = this.hoverMaterial;
+    } else {
+      this.material = this.standardMaterial;
+    }
+  }
 });
 
 function Edge(vertex1, vertex2) {
   var direction = new THREE.Vector3().subVectors(vertex2.position, vertex1.position);
   var arrow = new THREE.ArrowHelper(direction.clone().normalize(), vertex1.position);
   var edgeGeometry = new THREE.CylinderGeometry( 2, 2, direction.length(), 8, 4 );
+  this.status = {
+    hover: false,
+    improving: false
+  };
   THREE.Mesh.call(this,edgeGeometry,this.standardMaterial);
   var edge = this;
   edge.position.addVectors(vertex1.position, direction.multiplyScalar(0.5));
   edge.rotation.setFromQuaternion(arrow.quaternion);
 
+  domEvents.addEventListener(edge, "click", function() {
+    edge.setStatus( "improving", !edge.status.improving );
+  }, false);
   domEvents.addEventListener(edge, "mouseover", function() {
-    edge.material = edge.hoverMaterial;
+    edge.setStatus( "hover", true );
   }, false);
   domEvents.addEventListener(edge, "mouseout", function() {
-    edge.material = edge.standardMaterial;
+    edge.setStatus( "hover", false );
   });
 }
 Edge.prototype = Object.create(THREE.Mesh.prototype);
 Edge.prototype.constructor = Edge;
 Object.assign(Edge.prototype, {
   standardMaterial: new THREE.MeshLambertMaterial({ color: 0x666666 }),
-  hoverMaterial: new THREE.MeshLambertMaterial({ color: 0xcccccc })
+  hoverMaterial: new THREE.MeshLambertMaterial({ color: 0xcccccc }),
+  improvingMaterial: new THREE.MeshLambertMaterial({ color: 0x00aa00 }),
+  setStatus: function (attribute, status) {
+    this.status[attribute] = Boolean(status);
+    this.updateMaterial();
+  },
+  updateMaterial: function () {
+    if (this.status.improving) {
+      this.material = this.improvingMaterial;
+    } else if (this.status.hover) {
+      this.material = this.hoverMaterial;
+    } else {
+      this.material = this.standardMaterial;
+    }
+  }
 });
 
 function Face(vertices, normal) {
   //this class assumes, that the vertices are coplanar
   this.vertices = vertices;
+  this.status = {
+    active: false
+  };
   var geometry = new THREE.Geometry();
   geometry.vertices = vertices.map(function(v) {
     return v.position;
@@ -128,12 +159,14 @@ function Face(vertices, normal) {
     normal = new THREE.Vector3(normal[0], normal[1], normal[2]);
   }
   if (vertices.length === 1) {
+    this.faceType = "plane";
     geometry = new THREE.PlaneGeometry( 100, 100 );
     THREE.Mesh.call( this, geometry, this.planeMaterial );
     this.position.add( vertices[0].position );
     this.lookAt(normal);
   }
   if (vertices.length === 2) {
+    this.faceType = "plane";
     var edgeLength = vertices[0].position.distanceTo( vertices[1].position );
     console.log(edgeLength);
     geometry = new THREE.PlaneGeometry( 100 + edgeLength + 100, 100 );
@@ -142,6 +175,7 @@ function Face(vertices, normal) {
     this.lookAt(normal);
   }
   if (vertices.length >= 3) {
+    this.faceType = "face";
     var subFace;
     for (var i = 0; i < vertices.length - 2; i++) {
       subFace = new THREE.Face3( 0, i + 1, i + 2 );
@@ -149,18 +183,43 @@ function Face(vertices, normal) {
       geometry.faces.push(subFace);
     }
     geometry.computeFaceNormals();
-    THREE.Mesh.call( this, geometry, this.frontFaceMaterial );
+    THREE.Mesh.call( this, geometry, this.faceMaterial );
   }
   this.a = normal || subFace.normal;
   this.b = this.a.dot( vertices[0].position );
   console.log(this.a.x + "*x + " + this.a.y + "*y + " + this.a.z + "*z <= " + this.b);
+  var f = this;
+  domEvents.addEventListener(f, "click", function() {
+    f.setStatus( "active", !f.status.active );
+  }, false);
 }
 Face.prototype = Object.create(THREE.Mesh.prototype);
 Face.prototype.constructor = Face;
 Object.assign(Face.prototype, {
-  frontFaceMaterial: new THREE.MeshBasicMaterial({ color: 0xffffff, side: THREE.FrontSide, transparent: true, opacity: 0.5 }),
-  backFaceMaterial: new THREE.MeshBasicMaterial({ color: 0xffffff, side: THREE.BackSide, transparent: true, opacity: 0.5 }),
-  planeMaterial: new THREE.MeshBasicMaterial({ color: 0xffffff, side: THREE.DoubleSide, transparent: true, opacity: 0.5 })
+  faceMaterial: new THREE.MeshBasicMaterial({ color: 0xffffff, side: THREE.FrontSide, transparent: true, opacity: 0.5 }),
+  activefaceMaterial: new THREE.MeshBasicMaterial({ color: 0xff0000, side: THREE.FrontSide, transparent: true, opacity: 0.5 }),
+  //backFaceMaterial: new THREE.MeshBasicMaterial({ color: 0xffffff, side: THREE.BackSide, transparent: true, opacity: 0.5 }),
+  planeMaterial: new THREE.MeshBasicMaterial({ color: 0xffffff, side: THREE.DoubleSide, transparent: true, opacity: 0.5 }),
+  activePlaneMaterial: new THREE.MeshBasicMaterial({ color: 0xff0000, side: THREE.DoubleSide, transparent: true, opacity: 0.5 }),
+  setStatus: function (attribute, status) {
+    this.status[attribute] = Boolean(status);
+    this.updateMaterial();
+  },
+  updateMaterial: function () {
+    if (this.status.active) {
+      if (this.faceType === "face") {
+        this.material = this.activefaceMaterial;
+      } else {
+        this.material = this.activePlaneMaterial;
+      }
+    } else {
+      if (this.faceType === "face") {
+        this.material = this.faceMaterial;
+      } else {
+        this.material = this.planeMaterial;
+      }
+    }
+  }
 });
 
 /*
@@ -232,6 +291,30 @@ Object.assign(Polyhedron.prototype, {
         return v === vertex;
       });
     });
+  },
+  setStatus: function(status) {
+    var polyhedron = this;
+    ["vertices", "edges", "faces"].forEach(function(meshType){
+      if (!status[meshType]) return;
+      $.each( status[meshType], function(index, statusObject) {
+        var mesh = polyhedron[meshType][index];
+        if (mesh) {
+          $.each( statusObject, function(attribute, value) {
+            mesh.setStatus( attribute, Boolean(value) );
+          });
+        }
+      });
+    });
+  },
+  getStatus: function() {
+    var polyhedron = this;
+    var ret = {};
+    ["vertices", "edges", "faces"].forEach(function(meshType){
+      ret[meshType] = polyhedron[meshType].map(function(mesh){
+        return JSON.parse(JSON.stringify(mesh.status));
+      });
+    });
+    return ret;
   }
 });
 
