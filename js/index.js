@@ -87,6 +87,14 @@ Object.assign(Vertex.prototype, {
     this.status[attribute] = Boolean(status);
     this.updateMaterial();
   },
+  getStatus: function () {
+    var ret = {};
+    $.each( this.status, function(attribute, value){
+      if (attribute === "hover") return; //should not be copied
+      ret[attribute] = value;
+    });
+    return ret;
+  },
   updateMaterial: function() {
     if (this.status.active) {
       this.material = this.activeMaterial;
@@ -130,6 +138,14 @@ Object.assign(Edge.prototype, {
   setStatus: function (attribute, status) {
     this.status[attribute] = Boolean(status);
     this.updateMaterial();
+  },
+  getStatus: function () {
+    var ret = {};
+    $.each( this.status, function(attribute, value){
+      if (attribute === "hover") return; //should not be copied
+      ret[attribute] = value;
+    });
+    return ret;
   },
   updateMaterial: function () {
     if (this.status.improving) {
@@ -204,6 +220,14 @@ Object.assign(Face.prototype, {
   setStatus: function (attribute, status) {
     this.status[attribute] = Boolean(status);
     this.updateMaterial();
+  },
+  getStatus: function () {
+    var ret = {};
+    $.each( this.status, function(attribute, value){
+      if (attribute === "hover") return; //should not be copied
+      ret[attribute] = value;
+    });
+    return ret;
   },
   updateMaterial: function () {
     if (this.status.active) {
@@ -311,7 +335,7 @@ Object.assign(Polyhedron.prototype, {
     var ret = {};
     ["vertices", "edges", "faces"].forEach(function(meshType){
       ret[meshType] = polyhedron[meshType].map(function(mesh){
-        return JSON.parse(JSON.stringify(mesh.status));
+        return mesh.getStatus();
       });
     });
     return ret;
