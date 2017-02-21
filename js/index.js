@@ -57,32 +57,7 @@ function displayPolyhedron() {
   }
 }
 
-function Vertex(vector, id) {
-  THREE.Mesh.call(this, this.geometry, this.standardMaterial);
-  this.status = {
-    hover: false,
-    active: false
-  };
-  this.vertexId = id;
-  this.position.add(vector);
-  var v = this;
-  domEvents.addEventListener(v, "click", function() {
-    v.setStatus( "active", !v.status.active );
-  }, false);
-  domEvents.addEventListener(v, "mouseover", function() {
-    v.setStatus( "hover", true );
-  }, false);
-  domEvents.addEventListener(v, "mouseout", function() {
-    v.setStatus( "hover", false );
-  });
-}
-Vertex.prototype = Object.create(THREE.Mesh.prototype);
-Vertex.prototype.constructor = Vertex;
-Object.assign(Vertex.prototype, {
-  geometry: new THREE.SphereGeometry( 6, 12, 6 ),
-  standardMaterial: new THREE.MeshLambertMaterial({ color: 0x222244 }),
-  hoverMaterial: new THREE.MeshLambertMaterial({ color: 0x444488 }),
-  activeMaterial: new THREE.MeshLambertMaterial({ color: 0xff0000 }),
+var PolyhedronMesh = {
   setStatus: function (attribute, status) {
     this.status[attribute] = Boolean(status);
     this.updateMaterial();
@@ -95,6 +70,45 @@ Object.assign(Vertex.prototype, {
     });
     return ret;
   },
+  resetStatus: function () {
+    $.each( this.status, function(attribute){
+      this.status[attribute] = false;
+    }.bind(this) );
+    this.updateMaterial();
+  }
+};
+
+function Vertex(vector, id) {
+  THREE.Mesh.call(this, this.geometry, this.standardMaterial);
+  this.status = {
+    hover: false,
+    active: false
+  };
+  this.vertexId = id;
+  this.position.add(vector);
+  var v = this;
+  domEvents.addEventListener(v, "click", function() {
+    polyhedron.resetStatus();
+    v.setStatus( "active", !v.status.active );
+    polyhedron.getImprovingEdges(v).forEach(function(edge) {
+      edge.setStatus("improving",true);
+    });
+  }, false);
+  domEvents.addEventListener(v, "mouseover", function() {
+    v.setStatus( "hover", true );
+  }, false);
+  domEvents.addEventListener(v, "mouseout", function() {
+    v.setStatus( "hover", false );
+  });
+}
+Vertex.prototype = Object.create(THREE.Mesh.prototype);
+Vertex.prototype.constructor = Vertex;
+Object.assign(Vertex.prototype, PolyhedronMesh);
+Object.assign(Vertex.prototype, {
+  geometry: new THREE.SphereGeometry( 6, 12, 6 ),
+  standardMaterial: new THREE.MeshLambertMaterial({ color: 0x222244 }),
+  hoverMaterial: new THREE.MeshLambertMaterial({ color: 0x444488 }),
+  activeMaterial: new THREE.MeshLambertMaterial({ color: 0xff0000 }),
   updateMaterial: function() {
     if (this.status.active) {
       this.material = this.activeMaterial;
@@ -107,6 +121,7 @@ Object.assign(Vertex.prototype, {
 });
 
 function Edge(vertex1, vertex2) {
+  this.vertices = [vertex1, vertex2];
   var direction = new THREE.Vector3().subVectors(vertex2.position, vertex1.position);
   var arrow = new THREE.ArrowHelper(direction.clone().normalize(), vertex1.position);
   var edgeGeometry = new THREE.CylinderGeometry( 2, 2, direction.length(), 8, 4 );
@@ -115,10 +130,10 @@ function Edge(vertex1, vertex2) {
     improving: false
   };
   THREE.Mesh.call(this,edgeGeometry,this.standardMaterial);
-  var edge = this;
-  edge.position.addVectors(vertex1.position, direction.multiplyScalar(0.5));
-  edge.rotation.setFromQuaternion(arrow.quaternion);
+  this.position.addVectors(vertex1.position, direction.multiplyScalar(0.5));
+  this.rotation.setFromQuaternion(arrow.quaternion);
 
+  var edge = this;
   domEvents.addEventListener(edge, "click", function() {
     edge.setStatus( "improving", !edge.status.improving );
   }, false);
@@ -131,22 +146,11 @@ function Edge(vertex1, vertex2) {
 }
 Edge.prototype = Object.create(THREE.Mesh.prototype);
 Edge.prototype.constructor = Edge;
+Object.assign(Edge.prototype, PolyhedronMesh);
 Object.assign(Edge.prototype, {
   standardMaterial: new THREE.MeshLambertMaterial({ color: 0x666666 }),
   hoverMaterial: new THREE.MeshLambertMaterial({ color: 0xcccccc }),
   improvingMaterial: new THREE.MeshLambertMaterial({ color: 0x00aa00 }),
-  setStatus: function (attribute, status) {
-    this.status[attribute] = Boolean(status);
-    this.updateMaterial();
-  },
-  getStatus: function () {
-    var ret = {};
-    $.each( this.status, function(attribute, value){
-      if (attribute === "hover") return; //should not be copied
-      ret[attribute] = value;
-    });
-    return ret;
-  },
   updateMaterial: function () {
     if (this.status.improving) {
       this.material = this.improvingMaterial;
@@ -211,24 +215,13 @@ function Face(vertices, normal) {
 }
 Face.prototype = Object.create(THREE.Mesh.prototype);
 Face.prototype.constructor = Face;
+Object.assign(Face.prototype, PolyhedronMesh);
 Object.assign(Face.prototype, {
   faceMaterial: new THREE.MeshBasicMaterial({ color: 0xffffff, side: THREE.FrontSide, transparent: true, opacity: 0.5 }),
   activefaceMaterial: new THREE.MeshBasicMaterial({ color: 0xff0000, side: THREE.FrontSide, transparent: true, opacity: 0.5 }),
   //backFaceMaterial: new THREE.MeshBasicMaterial({ color: 0xffffff, side: THREE.BackSide, transparent: true, opacity: 0.5 }),
   planeMaterial: new THREE.MeshBasicMaterial({ color: 0xffffff, side: THREE.DoubleSide, transparent: true, opacity: 0.5 }),
   activePlaneMaterial: new THREE.MeshBasicMaterial({ color: 0xff0000, side: THREE.DoubleSide, transparent: true, opacity: 0.5 }),
-  setStatus: function (attribute, status) {
-    this.status[attribute] = Boolean(status);
-    this.updateMaterial();
-  },
-  getStatus: function () {
-    var ret = {};
-    $.each( this.status, function(attribute, value){
-      if (attribute === "hover") return; //should not be copied
-      ret[attribute] = value;
-    });
-    return ret;
-  },
   updateMaterial: function () {
     if (this.status.active) {
       if (this.faceType === "face") {
@@ -307,7 +300,9 @@ Object.assign(Polyhedron.prototype, {
     });
     return Object.keys(count).filter(function(vertexId){
       return count[vertexId] === faces.length;
-    });
+    }).map(function(vertexId){
+      return this.vertices[vertexId];
+    }.bind(this));
   },
   adjacentFaces: function(vertex) {
     return this.faces.filter(function(face){
@@ -315,6 +310,69 @@ Object.assign(Polyhedron.prototype, {
         return v === vertex;
       });
     });
+  },
+  getEdgeFromVertices: function(v) {
+    for (var i = 0; i < this.edges.length; i++) {
+      var w = this.edges[i].vertices;
+      if ( (v[0] === w[0] && v[1] === w[1]) || (v[0] === w[1] && v[1] === w[0]) ) {
+        return this.edges[i];
+      }
+    }
+    return null;
+  },
+  getImprovingEdges: function(vertex, direction) {
+    if (!(direction instanceof THREE.Vector3)) {
+      console.warn("[Polyhedron::getImprovingEdges] direction must be a THREE.Vector3");
+      direction = new THREE.Vector3(1,1,1);
+    }
+    var adjacent = this.adjacentFaces(vertex);
+    var matrix = new THREE.Matrix3();
+    var basisFaces;
+    var i, j, k;
+    searchLoop:
+    for (i = 0; i < adjacent.length; i++) {
+      for (j = i + 1; j < adjacent.length; j++) {
+        for (k = j + 1; k < adjacent.length; k++) {
+          var entries = [];
+          adjacent[i].a.toArray( entries, 0 );
+          adjacent[j].a.toArray( entries, 3 );
+          adjacent[k].a.toArray( entries, 6 );
+          matrix.fromArray( entries );
+          try {
+            matrix.getInverse( matrix, true );
+          } catch (e) {
+            continue;
+          }
+          basisFaces = [adjacent[i], adjacent[j], adjacent[k]];
+          break searchLoop;
+        }
+      }
+    }
+    if (basisFaces === undefined) {
+      console.warn("[Polyhedron::getImprovingEdges] could not find a valid basis");
+      return;
+    }
+    var comparison = direction.clone().applyMatrix3(matrix).toArray();
+    var improvingEdges = [];
+    for (i = 0; i < comparison.length; i++) {
+      if (comparison[i] < 0) {
+        var remainingFaces = basisFaces.filter(function () {
+          return arguments[1] !== i;
+        });
+        var edgeVertices = this.sharedVertices(remainingFaces);
+        if (edgeVertices.length !== 2) {
+          console.error("[Polyhedron::getImprovingEdges] unable to determine edge\n", remainingFaces);
+          return;
+        }
+        var edge = this.getEdgeFromVertices( edgeVertices );
+        if (edge === null) {
+          console.error("[Polyhedron::getImprovingEdges] edge not in the Polyhedron\n", edgeVertices);
+          return;
+        }
+        improvingEdges.push(edge);
+      }
+    }
+    return improvingEdges;
   },
   setStatus: function(status) {
     var polyhedron = this;
@@ -339,6 +397,14 @@ Object.assign(Polyhedron.prototype, {
       });
     });
     return ret;
+  },
+  resetStatus: function() {
+    var polyhedron = this;
+    ["vertices", "edges", "faces"].forEach(function(meshType){
+      polyhedron[meshType].forEach(function (mesh) {
+        mesh.resetStatus();
+      });
+    });
   }
 });
 
