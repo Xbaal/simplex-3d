@@ -1,5 +1,5 @@
 var camera, controls, scene, renderer, domEvents, stats, light, skyBox;
-
+var arrows = [];
 var polyhedron;
 var MODELS = {};
 
@@ -51,14 +51,14 @@ function init() {
 function displayPolyhedron() {
   var selectedModel = $("#model").val();
   if (MODELS[selectedModel]) {
-    if (polyhedron) scene.remove(polyhedron);
-    scene.children.forEach(function(object){
-      if (object === skyBox) return;
-      if (object === light) return;
-      if (object === camera) return;
-
-      scene.remove(object);
-    });
+    if (polyhedron) {
+      scene.remove( polyhedron );
+      scene.remove( polyhedron.directionArrow );
+      arrows.forEach(function(arrow) {
+        scene.remove( arrow );
+      });
+      arrows = [];
+    }
     polyhedron = new Polyhedron(MODELS[selectedModel]);
     scene.add(polyhedron);
   }
@@ -210,16 +210,9 @@ function Face(vertices, normal) {
     THREE.Mesh.call( this, geometry, this.faceMaterial );
   }
   if (normal) {
-    //var quaternion = new THREE.ArrowHelper(normal.clone().normalize(), new THREE.Vector3()).quaternion;
-    //var rot = new THREE.Matrix4().makeRotationFromQuaternion( quaternion ).makeRotationZ( Math.PI / 2 );
-    //this.applyMatrix(this.rotationMatrix);
-    //this.rotation.setFromQuaternion( rot.quaternion );
-
-    //var axis = new THREE.Vector3(0,0,1);
-    //this.quaternion.setFromUnitVectors( axis, normal.clone().normalize());
-
-    var arrowHelper = new THREE.ArrowHelper( normal.clone().normalize(), this.position, 50, 0x222200 );
-    scene.add( arrowHelper );
+    var arrow = new THREE.ArrowHelper( normal.clone().normalize(), this.position, 50, 0x222200 );
+    scene.add( arrow );
+    arrows.push( arrow );
 
     var m1 = new THREE.Matrix4().lookAt( this.position.clone().add(normal), this.position, this.up );
     this.quaternion.setFromRotationMatrix( m1 );
@@ -393,7 +386,7 @@ Object.assign(Polyhedron.prototype, {
     var bestEdges = [Math.PI / 2, []];
     for (var index = 0; index < basis.edgeDirections.length; index++) {
       var s = basis.edgeDirections[index];
-      console.log("edgeDirection",s);
+      //console.log("edgeDirection",s);
       var sc = s.dot( this.direction );
       if (sc > 0) {
         //var a = new THREE.ArrowHelper( s.clone().normalize(), v, 200, 0x0055aa );
@@ -476,6 +469,9 @@ Object.assign(Polyhedron.prototype, {
       return;
     }
     //random step
+    if (changes.length > 1) {
+      console.log("choosing randomly out of " + changes.length + " basis changes");
+    }
     var change = changes[Math.floor( Math.random() * changes.length )];
     console.log("basis change:",change);
     polyhedron.basis.changeBasis( change[0], change[1] ).setActive();
