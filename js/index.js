@@ -372,41 +372,34 @@ Object.assign(Polyhedron.prototype, {
     return best[1];
   },
   getImprovingBasisChanges: function() {
-    if (!this.basis || !this.basis.inverseMatrix) {
-      this.basis = this.getBasisForVertex(this.vertices[Math.floor(Math.random() * this.vertices.length)]);
+    var p = this;
+    var basis = p.basis;
+    if (!basis || !basis.inverseMatrix) {
+      basis = p.basis = p.getBasisForVertex(p.vertices[Math.floor(Math.random() * p.vertices.length)]);
     }
-    if (!this.basis.vertex) {
+    if (!basis.vertex) {
       console.error("[getImprovingEdges] invalid basis (no vertex identified)");
       return [];
     }
-    var basis = this.basis;
     var v = basis.vertex.position;
-    //var improvingEdges = [];
     var improvingBasisChanges = [];
-    var bestEdges = [Math.PI / 2, []];
+    var bestEdges = [0, []];
     for (var index = 0; index < basis.edgeDirections.length; index++) {
       var s = basis.edgeDirections[index];
-      //console.log("edgeDirection",s);
-      var sc = s.dot( this.direction );
-      if (sc > 0) {
-        //var a = new THREE.ArrowHelper( s.clone().normalize(), v, 200, 0x0055aa );
-        //scene.add( a );
-        basis.faces[index].setStatus( "bad", true );
-        var angle = s.angleTo( this.direction );
-        console.log(angle / Math.PI);
-        if (angle <= bestEdges[0]) {
-          if (angle < bestEdges[0]) {
-            bestEdges = [angle, []];
-          }
-          bestEdges[1].push( [index, s] );
+      var sc = s.dot( p.direction );
+      if (sc > 0) basis.faces[index].setStatus( "bad", true );
+      if (sc >= bestEdges[0]) {
+        if (sc > bestEdges[0]) {
+          bestEdges = [sc, []];
         }
+        bestEdges[1].push( [index, s] );
       }
     }
     bestEdges[1].forEach(function(a) {
       var index = a[0];
       var s = a[1];
       var bestLambda = [Infinity,[]];
-      this.faces.forEach(function(face) {
+      p.faces.forEach(function(face) {
         if (face.a.dot(s) <= 0) return;
         for (var i = 0; i < basis.faces.length; i++) {
           if (basis.faces[i] === face) return;
@@ -426,7 +419,7 @@ Object.assign(Polyhedron.prototype, {
       bestLambda[1].forEach(function(face) {
         improvingBasisChanges.push( [index,face] );
       });
-    }.bind(this));
+    });
 
     return improvingBasisChanges;
   },
