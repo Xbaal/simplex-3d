@@ -209,22 +209,28 @@ function Face(vertices, normal) {
     geometry.computeFaceNormals();
     THREE.Mesh.call( this, geometry, this.faceMaterial );
   }
-  if (normal) {
+  if (this.faceType === "plane") {
     var arrow = new THREE.ArrowHelper( normal.clone().normalize(), this.position, 50, 0x222200 );
     scene.add( arrow );
     arrows.push( arrow );
+    domEvents.addEventListener(arrow, "click", function() {
+      console.log(this.normal); //f.setStatus( "active", !f.status.active );
+    }.bind(this), true);
 
     var m1 = new THREE.Matrix4().lookAt( this.position.clone().add(normal), this.position, this.up );
     this.quaternion.setFromRotationMatrix( m1 );
   }
-  this.a = normal || subFace.normal;
-  this.a.normalize();
+  this.normal = normal || subFace.normal;
+  this.a = this.normal.clone().normalize();
   this.b = this.a.dot( vertices[0].position );
   console.log("face inequaltiy:",this.a.x + "*x + " + this.a.y + "*y + " + this.a.z + "*z <= " + this.b);
-  //var f = this;
-  //domEvents.addEventListener(f, "click", function() {
-  //  f.setStatus( "active", !f.status.active );
-  //}, false);
+
+  this.visible = false;
+
+  var f = this;
+  domEvents.addEventListener(f, "click", function() {
+    console.log(f.a); //f.setStatus( "active", !f.status.active );
+  }, true);
 }
 Face.prototype = Object.create(THREE.Mesh.prototype);
 Face.prototype.constructor = Face;
@@ -239,17 +245,20 @@ Object.assign(Face.prototype, {
 
   updateMaterial: function () {
     if (this.status.bad) {
+      this.visible = true;
       this.material = this.badPlaneMaterial;
     } else if (this.status.active) {
       //if (this.faceType === "face") {
       //  this.material = this.activefaceMaterial;
       //} else {
+      this.visible = true;
       this.material = this.activePlaneMaterial;
       //}
     } else {
       //if (this.faceType === "face") {
       //  this.material = this.faceMaterial;
       //} else {
+      this.visible = false;
       this.material = this.planeMaterial;
       //}
     }
@@ -272,6 +281,10 @@ function Polyhedron(data) {
     data.normal = {};
   }
   var i;
+
+  if (data.type === "h") {
+    Object.assign( data, this.hToV(data.h) );
+  }
 
   //TODO: consider removing multiplyScalar(100)
   var vertices = [];
@@ -304,12 +317,102 @@ function Polyhedron(data) {
   }
   this.faces = faces;
 
-  this.basis = null;
   this.direction = new THREE.Vector3(1,2,3);
+
+  if (data.basis) {
+    this.basis = new Basis(data.basis.map(function(faceIndex) {
+      return faces[faceIndex];
+    }), this).setActive();
+    console.log(this.basis);
+  } else {
+    this.basis = null;
+  }
 }
 Polyhedron.prototype = Object.create(THREE.Object3D.prototype);
 Polyhedron.prototype.constructor = Polyhedron;
 Object.assign(Polyhedron.prototype, {
+  hToV: function (inequalities) {
+    var eps = Math.pow( 2, -52 );
+
+    var A = [];
+    var b = [];
+    var faceVertices = [];
+    inequalities.forEach(function(ineq, i) {
+      A[i] = new THREE.Vector3().fromArray( ineq[0] );
+      b[i] = ineq[1];
+      faceVertices[i] = [];
+    });
+
+    var vertices = [];
+    var i,j,k,n = inequalities.length;
+    for (i = 0; i < n; i++) {
+      for (j = i + 1; j < n; j++) {
+        for (k = j + 1; k < n; k++) {
+          var elements = [];
+          A[i].toArray( elements, 0 );
+          A[j].toArray( elements, 3 );
+          A[k].toArray( elements, 6 );
+          //vectors as row-vectors
+          var AB = new THREE.Matrix3().fromArray( elements ).transpose();
+          try {
+            AB.getInverse( AB, true );
+          } catch (e) {
+            continue;
+          }
+          var vertex = new THREE.Vector3( b[i], b[j], b[k] ).applyMatrix3( AB );
+          var feasible = A.every(function(a, index){
+            return a.dot( vertex ) <= b[index] + eps;
+          });
+          if (!feasible) continue;
+          var overdetermined = vertices.some(function(v, id) {
+            if (v.distanceToManhattan( vertex ) > 3 * eps) return false;
+            if (faceVertices[i].indexOf( id ) === -1) faceVertices[i].push( id );
+            if (faceVertices[j].indexOf( id ) === -1) faceVertices[j].push( id );
+            if (faceVertices[k].indexOf( id ) === -1) faceVertices[k].push( id );
+            return true;
+          });
+          if (!overdetermined) {
+            vertices.push( vertex );
+            var id = vertices.length - 1;
+            faceVertices[i].push( id );
+            faceVertices[j].push( id );
+            faceVertices[k].push( id );
+          }
+        }
+      }
+    }
+    for (i = 0; i < vertices.length; i++) {
+      vertices[i] = vertices[i].toArray();
+    }
+    var edges = [];
+    for (i = 0; i < faceVertices.length; i++) {
+      for (j = i + 1; j < faceVertices.length; j++) {
+        var sharedVertices = faceVertices[i].filter(function(vertexId) {
+          return faceVertices[j].indexOf(vertexId) > -1;
+        });
+        if (sharedVertices.length === 2) {
+          edges.push( sharedVertices );
+        } else if (sharedVertices.length > 2) {
+          //same face
+        }
+      }
+    }
+    var normals = A.map(function(a){
+      return a.toArray();
+    });
+    console.log({
+      vertex: vertices,
+      edge: edges,
+      face: faceVertices,
+      normal: normals
+    });
+    return {
+      vertex: vertices,
+      edge: edges,
+      face: faceVertices,
+      normal: normals
+    };
+  },
   sharedVertices: function(faces) {
     var count = {};
     faces.forEach(function(face){
@@ -335,7 +438,7 @@ Object.assign(Polyhedron.prototype, {
     for (var i = 0; i < adjacent.length; i++) {
       for (var j = i + 1; j < adjacent.length; j++) {
         for (var k = j + 1; k < adjacent.length; k++) {
-          var b = new Basis( [adjacent[i], adjacent[j], adjacent[k]] );
+          var b = new Basis( [adjacent[i], adjacent[j], adjacent[k]], polyhedron );
           if (b.vertex && b.inverseMatrix) return b;
         }
       }
@@ -375,7 +478,7 @@ Object.assign(Polyhedron.prototype, {
     var p = this;
     var basis = p.basis;
     if (!basis || !basis.inverseMatrix) {
-      basis = p.basis = p.getBasisForVertex(p.vertices[Math.floor(Math.random() * p.vertices.length)]);
+      basis = p.basis = p.getBasisForVertex(p.vertices[Math.floor(Math.random() * p.vertices.length)]).setActive();
     }
     if (!basis.vertex) {
       console.error("[getImprovingEdges] invalid basis (no vertex identified)");
@@ -471,10 +574,15 @@ Object.assign(Polyhedron.prototype, {
   }
 });
 
-function Basis (basisFaces) {
+function Basis (basisFaces, p) {
   //basis vectors are row-vectors in this.matrix
+  if (p) {
+    this.polyhedron = p;
+  } else {
+    this.polyhedron = polyhedron;
+  }
   this.faces = basisFaces;
-  this.vertices = polyhedron.sharedVertices(basisFaces);
+  this.vertices = this.polyhedron.sharedVertices(basisFaces);
   if (this.vertices.length === 1) {
     this.vertex = this.vertices[0];
   }
@@ -498,25 +606,25 @@ function Basis (basisFaces) {
   }
 
   this.setActive = function() {
-    polyhedron.vertices.forEach(function(vertex) {
+    this.polyhedron.vertices.forEach(function(vertex) {
       vertex.setStatus( "active", false );
     });
     this.vertices.forEach(function(vertex) {
       vertex.setStatus( "active", true );
     });
-    polyhedron.faces.forEach(function(face) {
+    this.polyhedron.faces.forEach(function(face) {
       face.setStatus( "active", false );
     });
     for (var i = 0; i < basisFaces.length; i++) {
       basisFaces[i].setStatus( "active", true );
     }
     if (this.vertex) {
-      if (polyhedron.directionArrow) {
-        polyhedron.directionArrow.position.copy( this.vertex.position );
+      if (this.polyhedron.directionArrow) {
+        this.polyhedron.directionArrow.position.copy( this.vertex.position );
       } else {
-        var d = polyhedron.direction.clone().normalize();
-        polyhedron.directionArrow = new THREE.ArrowHelper( d, this.vertex.position, 100, 0xffa500 );
-        scene.add( polyhedron.directionArrow );
+        var d = this.polyhedron.direction.clone().normalize();
+        this.polyhedron.directionArrow = new THREE.ArrowHelper( d, this.vertex.position, 100, 0xffa500 );
+        scene.add( this.polyhedron.directionArrow );
       }
     }
     return this;
@@ -524,13 +632,13 @@ function Basis (basisFaces) {
 
   this.changeBasis = function (indexOut, newFace) {
     console.log("changing basis, current faces:",this.faces);
-    polyhedron.vertex && polyhedron.vertex.setStatus( "active", false );
+    this.polyhedron.vertex && this.polyhedron.vertex.setStatus( "active", false );
     this.faces[indexOut].setStatus( "active", false );
     for (var i = 0; i < this.faces.length; i++) {
       this.faces[i].setStatus( "bad", false );
     }
     this.faces.splice( indexOut, 1, newFace );
-    Basis.call(this, this.faces);
+    Basis.call(this, this.faces, this.polyhedron);
     return this;
   };
 }
