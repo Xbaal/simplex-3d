@@ -18,7 +18,10 @@ function init() {
   var VIEW_ANGLE = 45, ASPECT = SCREEN_WIDTH / SCREEN_HEIGHT, NEAR = 0.1, FAR = 20000;
   camera = new THREE.PerspectiveCamera( VIEW_ANGLE, ASPECT, NEAR, FAR);
   scene.add(camera);
-  camera.position.set(0,150,400);
+  camera.mid = new THREE.Vector3();
+  camera.minDistance = 1;
+  camera.maxDistance = 5;
+  camera.position.set(0,0,3);
   camera.lookAt(scene.position);
   // RENDERER
   if ( Detector.webgl ) {
@@ -53,13 +56,16 @@ function displayPolyhedron() {
   if (MODELS[selectedModel]) {
     if (polyhedron) {
       scene.remove( polyhedron );
-      scene.remove( polyhedron.directionArrow );
       arrows.forEach(function(arrow) {
         scene.remove( arrow );
       });
       arrows = [];
     }
     polyhedron = new Polyhedron(MODELS[selectedModel]);
+    controls.target.copy( polyhedron.mid );
+    camera.mid = polyhedron.mid;
+    camera.minDistance = polyhedron.radius * 2;
+    camera.maxDistance = polyhedron.radius * 5;
     scene.add(polyhedron);
   }
 }
@@ -85,7 +91,7 @@ var PolyhedronMesh = {
   }
 };
 
-function Vertex(vector, id) {
+function Vertex(vector, id, scale) {
   THREE.Mesh.call(this, this.geometry, this.standardMaterial);
   this.status = {
     hover: false,
@@ -93,6 +99,7 @@ function Vertex(vector, id) {
   };
   this.vertexId = id;
   this.position.add(vector);
+  this.scale.multiplyScalar(scale);
   var v = this;
   domEvents.addEventListener(v, "click", function() {
     polyhedron.resetStatus();
@@ -125,7 +132,7 @@ Object.assign(Vertex.prototype, {
   }
 });
 
-function Edge(vertex1, vertex2) {
+function Edge(vertex1, vertex2, scale) {
   this.vertices = [vertex1, vertex2];
   var direction = new THREE.Vector3().subVectors(vertex2.position, vertex1.position);
   var arrow = new THREE.ArrowHelper(direction.clone().normalize(), vertex1.position);
@@ -134,10 +141,12 @@ function Edge(vertex1, vertex2) {
     hover: false,
     improving: false
   };
-  THREE.Mesh.call(this,edgeGeometry,this.standardMaterial);
-  this.position.addVectors(vertex1.position, direction.multiplyScalar(0.5));
-  this.rotation.setFromQuaternion(arrow.quaternion);
+  THREE.Mesh.call( this, edgeGeometry, this.standardMaterial );
+  this.position.addVectors( vertex1.position, direction.multiplyScalar(0.5) );
+  this.rotation.setFromQuaternion( arrow.quaternion );
 
+  this.scale.setX( scale );
+  this.scale.setZ( scale );
   var edge = this;
   //domEvents.addEventListener(edge, "click", function() {
   //  edge.setStatus( "improving", !edge.status.improving );
@@ -167,7 +176,7 @@ Object.assign(Edge.prototype, {
   }
 });
 
-function Face(vertices, normal) {
+function Face(vertices, normal, scale) {
   //this class assumes, that the vertices are coplanar
   this.vertices = vertices;
   this.status = {
@@ -185,7 +194,7 @@ function Face(vertices, normal) {
   }
   if (vertices.length === 1) {
     this.faceType = "plane";
-    geometry = new THREE.PlaneGeometry( 100, 100 );
+    geometry = new THREE.PlaneGeometry( 100 * scale, 100 * scale );
     THREE.Mesh.call( this, geometry, this.planeMaterial );
     this.position.add( vertices[0].position );
   }
@@ -193,7 +202,7 @@ function Face(vertices, normal) {
     this.faceType = "plane";
     var edgeLength = vertices[0].position.distanceTo( vertices[1].position );
     console.log(edgeLength);
-    geometry = new THREE.PlaneGeometry( 100 + edgeLength + 100, 100 );
+    geometry = new THREE.PlaneGeometry( edgeLength + 200 * scale, 100 * scale );
     THREE.Mesh.call(this, geometry, this.planeMaterial);
     this.position.addVectors( vertices[0].position, vertices[1].position ).multiplyScalar( .5 );
     this.up = this.position.clone().normalize();
@@ -210,7 +219,7 @@ function Face(vertices, normal) {
     THREE.Mesh.call( this, geometry, this.faceMaterial );
   }
   if (this.faceType === "plane") {
-    var arrow = new THREE.ArrowHelper( normal.clone().normalize(), this.position, 50, 0x222200 );
+    var arrow = new THREE.ArrowHelper( normal.clone().normalize(), this.position,  50 * scale, 0x222200 );
     scene.add( arrow );
     arrows.push( arrow );
     domEvents.addEventListener(arrow, "click", function() {
@@ -220,6 +229,7 @@ function Face(vertices, normal) {
     var m1 = new THREE.Matrix4().lookAt( this.position.clone().add(normal), this.position, this.up );
     this.quaternion.setFromRotationMatrix( m1 );
   }
+
   this.normal = normal || subFace.normal;
   this.a = this.normal.clone().normalize();
   this.b = this.a.dot( vertices[0].position );
@@ -288,11 +298,21 @@ function Polyhedron(data) {
     Object.assign( data, this.hToV(data.h) );
   }
 
-  //TODO: consider removing multiplyScalar(100)
+  var mean = data.vertex.reduce(function(s,v) {
+    s[0] += v[0] / data.vertex.length;
+    s[1] += v[1] / data.vertex.length;
+    s[2] += v[2] / data.vertex.length;
+    return s;
+  },[0,0,0]);
+  this.mid = new THREE.Vector3( mean[0], mean[1], mean[2] );
+  this.radius = data.vertex.reduce(function(max,v) {
+    return Math.max( max, new THREE.Vector3( v[0], v[1], v[2] ).distanceTo( this.mid ) );
+  }.bind(this), 0);
+
   var vertices = [];
   for (i = 0; i < data.vertex.length; i++) {
-    var vector = new THREE.Vector3(data.vertex[i][0], data.vertex[i][1], data.vertex[i][2]).multiplyScalar(100);
-    var vertex = new Vertex(vector, i);
+    var vector = new THREE.Vector3(data.vertex[i][0], data.vertex[i][1], data.vertex[i][2]);
+    var vertex = new Vertex(vector, i, this.radius / 100);
     vertices.push(vertex);
     this.add(vertex);
   }
@@ -302,7 +322,7 @@ function Polyhedron(data) {
   for (i = 0; i < data.edge.length; i++) {
     var index0 = data.edge[i][0];
     var index1 = data.edge[i][1];
-    var edge = new Edge(vertices[index0], vertices[index1]);
+    var edge = new Edge(vertices[index0], vertices[index1], this.radius / 100);
     edges.push(edge);
     this.add(edge);
   }
@@ -313,13 +333,17 @@ function Polyhedron(data) {
     var v = data.face[i].map(function(index){
       return vertices[index];
     });
-    var face = new Face(v, data.normal[i]);
+    var face = new Face(v, data.normal[i], this.radius / 100);
     faces.push(face);
     this.add(face);
   }
   this.faces = faces;
 
   this.direction = new THREE.Vector3(1,2,3);
+  var dirArrow = new THREE.ArrowHelper( this.direction.clone().normalize(), this.mid, this.radius, 0xffa500 );
+  dirArrow.visible = false;
+  this.directionArrow = dirArrow;
+  this.add( dirArrow );
 
   if (data.basis) {
     this.basis = new Basis(data.basis.map(function(faceIndex) {
@@ -650,11 +674,10 @@ function Basis (basisFaces, p) {
     for (var i = 0; i < basisFaces.length; i++) {
       basisFaces[i].setStatus( "active", true );
     }
-    scene.remove( this.polyhedron.directionArrow );
+    this.polyhedron.directionArrow.visible = false;
     if (this.vertex) {
-      var d = this.polyhedron.direction.clone().normalize();
-      this.polyhedron.directionArrow = new THREE.ArrowHelper( d, this.vertex.position, 100, 0xffa500 );
-      scene.add( this.polyhedron.directionArrow );
+      this.polyhedron.directionArrow.visible = true;
+      this.polyhedron.directionArrow.position.copy( this.vertex.position );
     }
     return this;
   };
@@ -684,10 +707,11 @@ function onWindowResize() {
 function animate() {
 
   //restrict zoom-range
-  if (camera.position.length() < 150) {
-    camera.position.setLength(150);
-  } else if (camera.position.length() > 500) {
-    camera.position.setLength(500);
+  var dir = camera.position.clone().sub( camera.mid ).normalize();
+  if (camera.position.distanceTo( camera.mid ) < camera.minDistance) {
+    camera.position.copy( camera.mid.clone().add(dir.multiplyScalar(camera.minDistance)));
+  } else if (camera.position.distanceTo( camera.mid ) > camera.maxDistance) {
+    camera.position.copy( camera.mid.clone().add(dir.multiplyScalar(camera.maxDistance)));
   }
 
   requestAnimationFrame( animate );
