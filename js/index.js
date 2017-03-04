@@ -282,6 +282,8 @@ function Polyhedron(data) {
   }
   var i;
 
+  this.statusStack = [];
+
   if (data.type === "h") {
     Object.assign( data, this.hToV(data.h) );
   }
@@ -558,7 +560,25 @@ Object.assign(Polyhedron.prototype, {
       });
     });
   },
+  backupStatus: function() {
+    var s = {};
+    s.stepState = this.stepState;
+    s.basisFaces = this.basis && this.basis.faces.slice();
+    this.statusStack.push(s);
+  },
+  rebuildStatus: function(s) {
+    this.stepState = s.stepState;
+    if (s.basisFaces) {
+      this.basis = new Basis( s.basisFaces, this ).setActive();
+    } else {
+      this.basis = new Basis( [], this ).setActive();
+    }
+  },
   makeStep: function() {
+    if (!this.stepState) {
+      this.stepState = "basisFound";
+    }
+    this.backupStatus();
     var changes = polyhedron.getImprovingBasisChanges();
     if (changes.length === 0) {
       console.warn("can't find a better solution!!");
@@ -571,6 +591,14 @@ Object.assign(Polyhedron.prototype, {
     var change = changes[Math.floor( Math.random() * changes.length )];
     console.log("basis change:",change);
     polyhedron.basis.changeBasis( change[0], change[1] ).setActive();
+  },
+  rewindStep: function() {
+    var oldStatus = this.statusStack.pop();
+    if (!oldStatus) {
+      console.warn("There is no previous status");
+      return;
+    }
+    this.rebuildStatus( oldStatus );
   }
 });
 
@@ -586,46 +614,47 @@ function Basis (basisFaces, p) {
   if (this.vertices.length === 1) {
     this.vertex = this.vertices[0];
   }
-  var elements = [];
-  basisFaces[0].a.toArray( elements, 0 );
-  basisFaces[1].a.toArray( elements, 3 );
-  basisFaces[2].a.toArray( elements, 6 );
-  this.matrix = new THREE.Matrix3().fromArray( elements ).transpose();
+  if (basisFaces.length === 3) {
+    var elements = [];
+    basisFaces[0].a.toArray( elements, 0 );
+    basisFaces[1].a.toArray( elements, 3 );
+    basisFaces[2].a.toArray( elements, 6 );
+    this.matrix = new THREE.Matrix3().fromArray( elements ).transpose();
 
-  this.inverseMatrix = null;
-  this.edgeDirections = [];
-  try {
-    this.inverseMatrix = new THREE.Matrix3().getInverse( this.matrix, true );
-    var mA = this.inverseMatrix.toArray();
-    //negation to point in edge direction
-    this.edgeDirections[0] = new THREE.Vector3().fromArray( mA, 0 ).negate().normalize();
-    this.edgeDirections[1] = new THREE.Vector3().fromArray( mA, 3 ).negate().normalize();
-    this.edgeDirections[2] = new THREE.Vector3().fromArray( mA, 6 ).negate().normalize();
-  } catch (e) {
-    console.error("invalid basis");
+    this.inverseMatrix = null;
+    this.edgeDirections = [];
+    try {
+      this.inverseMatrix = new THREE.Matrix3().getInverse( this.matrix, true );
+      var mA = this.inverseMatrix.toArray();
+      //negation to point in edge direction
+      this.edgeDirections[0] = new THREE.Vector3().fromArray( mA, 0 ).negate().normalize();
+      this.edgeDirections[1] = new THREE.Vector3().fromArray( mA, 3 ).negate().normalize();
+      this.edgeDirections[2] = new THREE.Vector3().fromArray( mA, 6 ).negate().normalize();
+    } catch (e) {
+      console.error("invalid basis");
+    }
   }
 
   this.setActive = function() {
+    //setting activity status of vertices
     this.polyhedron.vertices.forEach(function(vertex) {
       vertex.setStatus( "active", false );
     });
     this.vertices.forEach(function(vertex) {
       vertex.setStatus( "active", true );
     });
+    //setting activity status of faces
     this.polyhedron.faces.forEach(function(face) {
       face.setStatus( "active", false );
     });
     for (var i = 0; i < basisFaces.length; i++) {
       basisFaces[i].setStatus( "active", true );
     }
+    scene.remove( this.polyhedron.directionArrow );
     if (this.vertex) {
-      if (this.polyhedron.directionArrow) {
-        this.polyhedron.directionArrow.position.copy( this.vertex.position );
-      } else {
-        var d = this.polyhedron.direction.clone().normalize();
-        this.polyhedron.directionArrow = new THREE.ArrowHelper( d, this.vertex.position, 100, 0xffa500 );
-        scene.add( this.polyhedron.directionArrow );
-      }
+      var d = this.polyhedron.direction.clone().normalize();
+      this.polyhedron.directionArrow = new THREE.ArrowHelper( d, this.vertex.position, 100, 0xffa500 );
+      scene.add( this.polyhedron.directionArrow );
     }
     return this;
   };
