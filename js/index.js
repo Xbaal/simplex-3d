@@ -63,9 +63,10 @@ function displayPolyhedron() {
     }
     polyhedron = new Polyhedron(MODELS[selectedModel]);
     controls.target.copy( polyhedron.mid );
-    camera.mid = polyhedron.mid;
+    polyhedron.position.copy( polyhedron.mid );
     camera.minDistance = polyhedron.radius * 2;
     camera.maxDistance = polyhedron.radius * 5;
+    camera.position.copy( new THREE.Vector3(0,0,polyhedron.radius * 3) );
     scene.add(polyhedron);
   }
 }
@@ -707,11 +708,10 @@ function onWindowResize() {
 function animate() {
 
   //restrict zoom-range
-  var dir = camera.position.clone().sub( camera.mid ).normalize();
-  if (camera.position.distanceTo( camera.mid ) < camera.minDistance) {
-    camera.position.copy( camera.mid.clone().add(dir.multiplyScalar(camera.minDistance)));
-  } else if (camera.position.distanceTo( camera.mid ) > camera.maxDistance) {
-    camera.position.copy( camera.mid.clone().add(dir.multiplyScalar(camera.maxDistance)));
+  if (camera.position.length() < camera.minDistance) {
+    camera.position.setLength(camera.minDistance);
+  } else if (camera.position.length() > camera.maxDistance) {
+    camera.position.setLength(camera.maxDistance);
   }
 
   requestAnimationFrame( animate );
