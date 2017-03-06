@@ -18,21 +18,10 @@ function init() {
   var VIEW_ANGLE = 45, ASPECT = SCREEN_WIDTH / SCREEN_HEIGHT, NEAR = 0.1, FAR = 20000;
   camera = new THREE.PerspectiveCamera( VIEW_ANGLE, ASPECT, NEAR, FAR);
   scene.add(camera);
-  camera.mid = new THREE.Vector3();
   camera.minDistance = 1;
   camera.maxDistance = 5;
   camera.position.set(0,0,3);
-  //camera.lookAt(scene.position);
-  cameraTween = new TWEEN.Tween({ x: 0, y: 0, z: 0, l: 0 }).easing( TWEEN.Easing.Sinusoidal.InOut ).onUpdate(function() {
-    var pos = new THREE.Vector3( this.x, this.y, this.z );
-    var angle = pos.angleTo( camera.position );
-    if (angle !== 0) {
-      var axis = new THREE.Vector3().crossVectors( camera.position, pos ).normalize();
-      var q = new THREE.Quaternion().setFromAxisAngle( axis, angle );
-      camera.up.applyQuaternion( q );
-    }
-    camera.position.copy( pos ).setLength( this.l );
-  });
+  camera.lookAt(scene.position);
 
   // RENDERER
   if ( Detector.webgl ) {
@@ -103,20 +92,19 @@ function Vertex(vector, id, scale) {
     active: false
   };
   this.vertexId = id;
-  this.position.add(vector);
+  this.position.copy( vector );
   this.scale.multiplyScalar(scale);
-  var v = this;
-  domEvents.addEventListener(v, "click", function() {
+  domEvents.addEventListener(this, "click", function() {
     polyhedron.resetStatus();
-    console.log("clicked on: vertexId",v.vertexId);
-    polyhedron.basis = polyhedron.getBasisForVertex( v ).setActive();
-  }, false);
-  domEvents.addEventListener(v, "mouseover", function() {
-    v.setStatus( "hover", true );
-  }, false);
-  domEvents.addEventListener(v, "mouseout", function() {
-    v.setStatus( "hover", false );
-  });
+    console.log("clicked on: vertexId",this.vertexId);
+    polyhedron.basis = polyhedron.getBasisForVertex( polyhedron.vertices[this.vertexId] ).setActive();
+  }.bind(this), false);
+  domEvents.addEventListener(this, "mouseover", function() {
+    this.setStatus( "hover", true );
+  }.bind(this), false);
+  domEvents.addEventListener(this, "mouseout", function() {
+    this.setStatus( "hover", false );
+  }.bind(this), false);
 }
 Vertex.prototype = Object.create(THREE.Mesh.prototype);
 Vertex.prototype.constructor = Vertex;
@@ -152,16 +140,15 @@ function Edge(vertex1, vertex2, scale) {
 
   this.scale.setX( scale );
   this.scale.setZ( scale );
-  var edge = this;
-  //domEvents.addEventListener(edge, "click", function() {
+  //domEvents.addEventListener(this, "click", function() {
   //  edge.setStatus( "improving", !edge.status.improving );
-  //}, false);
-  domEvents.addEventListener(edge, "mouseover", function() {
-    edge.setStatus( "hover", true );
-  }, false);
-  domEvents.addEventListener(edge, "mouseout", function() {
-    edge.setStatus( "hover", false );
-  });
+  //}.bind(this), false);
+  domEvents.addEventListener(this, "mouseover", function() {
+    this.setStatus( "hover", true );
+  }.bind(this), false);
+  domEvents.addEventListener(this, "mouseout", function() {
+    this.setStatus( "hover", false );
+  }.bind(this), false);
 }
 Edge.prototype = Object.create(THREE.Mesh.prototype);
 Edge.prototype.constructor = Edge;
@@ -234,11 +221,6 @@ function Face(vertices, normal, scale) {
   console.log("face inequaltiy:",this.a.x + "*x + " + this.a.y + "*y + " + this.a.z + "*z <= " + this.b);
 
   this.visible = false;
-
-  var f = this;
-  domEvents.addEventListener(f, "click", function() {
-    console.log(f.a); //f.setStatus( "active", !f.status.active );
-  }, true);
 }
 Face.prototype = Object.create(THREE.Mesh.prototype);
 Face.prototype.constructor = Face;
@@ -697,9 +679,28 @@ function onWindowResize() {
 
 }
 
-function moveCamera (pos, dist) {
-  if (dist === undefined) dist = camera.position.length();
-  cameraTween.stop().to({ x: pos.x, y: pos.y, z: pos.z, l: dist }, 500).start();
+function moveCamera (finalPos, dist) {
+  if (cameraTween) cameraTween.stop();
+  if (dist === undefined) {
+    dist = camera.position.length();
+  }
+  var startPos = camera.position.clone();
+  var cameraUpStart = camera.up.clone();
+  var finalAngle = finalPos.angleTo( startPos );
+  var axis = new THREE.Vector3().crossVectors( startPos, finalPos ).normalize();
+
+  cameraTween = new TWEEN.Tween({ angle: 0, l: camera.position.length() })
+  .to({ angle: finalAngle, l: dist }, 500)
+  .easing( TWEEN.Easing.Quadratic.InOut )
+  .onUpdate(function() {
+    if (this.angle !== 0) {
+      var q = new THREE.Quaternion().setFromAxisAngle( axis, this.angle );
+      camera.up.copy( cameraUpStart.clone().applyQuaternion( q ) );
+      camera.position.copy( startPos.clone().applyQuaternion( q ) );
+    }
+    camera.position.setLength( this.l );
+  })
+  .start();
 }
 
 function animate() {
