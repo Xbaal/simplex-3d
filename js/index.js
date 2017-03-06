@@ -1,5 +1,5 @@
-var camera, controls, scene, renderer, domEvents, stats, light, skyBox;
-var arrows = [];
+var camera, cameraTween;
+var controls, scene, renderer, domEvents, stats, light, skyBox;
 var polyhedron;
 var MODELS = {};
 
@@ -22,7 +22,18 @@ function init() {
   camera.minDistance = 1;
   camera.maxDistance = 5;
   camera.position.set(0,0,3);
-  camera.lookAt(scene.position);
+  //camera.lookAt(scene.position);
+  cameraTween = new TWEEN.Tween({ x: 0, y: 0, z: 0, l: 0 }).easing( TWEEN.Easing.Sinusoidal.InOut ).onUpdate(function() {
+    var pos = new THREE.Vector3( this.x, this.y, this.z );
+    var angle = pos.angleTo( camera.position );
+    if (angle !== 0) {
+      var axis = new THREE.Vector3().crossVectors( camera.position, pos ).normalize();
+      var q = new THREE.Quaternion().setFromAxisAngle( axis, angle );
+      camera.up.applyQuaternion( q );
+    }
+    camera.position.copy( pos ).setLength( this.l );
+  });
+
   // RENDERER
   if ( Detector.webgl ) {
     renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -54,19 +65,12 @@ function init() {
 function displayPolyhedron() {
   var selectedModel = $("#model").val();
   if (MODELS[selectedModel]) {
-    if (polyhedron) {
-      scene.remove( polyhedron );
-      arrows.forEach(function(arrow) {
-        scene.remove( arrow );
-      });
-      arrows = [];
-    }
-    polyhedron = new Polyhedron(MODELS[selectedModel]);
-    controls.target.copy( polyhedron.mid );
-    polyhedron.position.copy( polyhedron.mid );
+    if (polyhedron) scene.remove( polyhedron );
+    polyhedron = new Polyhedron( MODELS[selectedModel] );
+    polyhedron.position.copy( polyhedron.mid ).multiplyScalar( -1 );
     camera.minDistance = polyhedron.radius * 2;
     camera.maxDistance = polyhedron.radius * 5;
-    camera.position.copy( new THREE.Vector3(0,0,polyhedron.radius * 3) );
+    moveCamera( new THREE.Vector3(0,0,1), polyhedron.radius * 3 );
     scene.add(polyhedron);
   }
 }
@@ -220,13 +224,6 @@ function Face(vertices, normal, scale) {
     THREE.Mesh.call( this, geometry, this.faceMaterial );
   }
   if (this.faceType === "plane") {
-    var arrow = new THREE.ArrowHelper( normal.clone().normalize(), this.position,  50 * scale, 0x222200 );
-    scene.add( arrow );
-    arrows.push( arrow );
-    domEvents.addEventListener(arrow, "click", function() {
-      console.log(this.normal); //f.setStatus( "active", !f.status.active );
-    }.bind(this), true);
-
     var m1 = new THREE.Matrix4().lookAt( this.position.clone().add(normal), this.position, this.up );
     this.quaternion.setFromRotationMatrix( m1 );
   }
@@ -275,16 +272,6 @@ Object.assign(Face.prototype, {
     }
   }
 });
-
-/*
-//Arrows
-var dir = new THREE.Vector3( 1, 2, 0 );
-var origin = new THREE.Vector3( 100, 0, 0 );
-var length = 100;
-
-var arrowHelper = new THREE.ArrowHelper( dir.normalize(), origin, length, 0x222200 );
-scene.add( arrowHelper );
-*/
 
 function Polyhedron(data) {
   THREE.Object3D.call(this);
@@ -335,6 +322,10 @@ function Polyhedron(data) {
       return vertices[index];
     });
     var face = new Face(v, data.normal[i], this.radius / 100);
+    if (face.faceType === "plane") {
+      var arrow = new THREE.ArrowHelper( face.normal.clone().normalize(), face.position, this.radius / 2, 0x222200 );
+      this.add( arrow );
+    }
     faces.push(face);
     this.add(face);
   }
@@ -679,6 +670,7 @@ function Basis (basisFaces, p) {
     if (this.vertex) {
       this.polyhedron.directionArrow.visible = true;
       this.polyhedron.directionArrow.position.copy( this.vertex.position );
+      moveCamera( this.vertex.getWorldPosition() );
     }
     return this;
   };
@@ -705,6 +697,11 @@ function onWindowResize() {
 
 }
 
+function moveCamera (pos, dist) {
+  if (dist === undefined) dist = camera.position.length();
+  cameraTween.stop().to({ x: pos.x, y: pos.y, z: pos.z, l: dist }, 500).start();
+}
+
 function animate() {
 
   //restrict zoom-range
@@ -715,6 +712,8 @@ function animate() {
   }
 
   requestAnimationFrame( animate );
+
+  TWEEN.update();
 
   controls.update(); // required if controls.enableDamping = true, or if controls.autoRotate = true
 

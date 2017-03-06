@@ -93,7 +93,7 @@
     "THREE": true,
     "Detector": true,
     "THREEx": true,
-    "MODELS": true,
-    "$": true
+    "$": true,
+    "TWEEN": true
   }
 }
