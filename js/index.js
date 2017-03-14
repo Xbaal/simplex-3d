@@ -173,7 +173,9 @@ function Face(vertices, id, normal, scale) {
   this.vertices = vertices;
   this.faceId = id;
   this.status = {
-    active: false
+    active: false,
+    in: false,
+    out: false
   };
   var geometry = new THREE.Geometry();
   geometry.vertices = vertices.map(function(v) {
@@ -486,7 +488,7 @@ Object.assign(Polyhedron.prototype, {
         if (sc > bestEdges[0]) {
           console.log("better i_raus");
           bestEdges = [sc, [[index,s]]];
-        } else if (basis.faces[bestEdges[1][0][0]].faceId > basis.faces[index].faceId) {
+        } else if (bestEdges[1][0] && basis.faces[bestEdges[1][0][0]].faceId > basis.faces[index].faceId) {
           //take edge with lowest Id
           console.log("i_raus with lower id");
           bestEdges = [sc, [[index,s]]];
@@ -527,7 +529,8 @@ Object.assign(Polyhedron.prototype, {
       return;
     }
     bestLambda[1].forEach(function(face) {
-      improvingBasisChanges.push( [index,face] );
+      var newVertexPosition = s.clone().multiplyScalar(bestLambda[0]).add(v);
+      improvingBasisChanges.push( [index,face,newVertexPosition] );
     });
     return improvingBasisChanges[0];
   },
@@ -569,17 +572,21 @@ Object.assign(Polyhedron.prototype, {
     s.basisFaces = this.basis && this.basis.faces.slice();
     s.edgeChoice = this.edgeChoice;
     s.basisChange = this.basisChange;
+    s.viewStatus = this.getStatus();
+    s.cameraPosition = camera.position.clone();
     this.statusStack.push(s);
   },
   rebuildStatus: function(s) {
     this.stepState = s.stepState;
     this.edgeChoice = s.edgeChoice;
     this.basisChange = s.basisChange;
+    this.setStatus( s.viewStatus );
     if (s.basisFaces) {
       this.basis = new Basis( s.basisFaces, this ).setActive();
     } else {
       this.basis = new Basis( [], this ).setActive();
     }
+    moveCamera( s.cameraPosition );
   },
   makeStep: function() {
     if (!this.stepState) {
@@ -591,6 +598,7 @@ Object.assign(Polyhedron.prototype, {
     }
     this.backupStatus();
     if (this.stepState === "findBasis") {
+      this.statusStack.pop(); //there is no reason to go back to the empty beginning state
       var randomVertex = this.vertices[Math.floor(Math.random() * this.vertices.length)];
       this.basis = this.getBasisForVertex( randomVertex ).setActive();
       this.stepState = "basisFound";
@@ -598,6 +606,7 @@ Object.assign(Polyhedron.prototype, {
       this.edgeChoice = this.getImprovingEdge();
       if (this.edgeChoice === undefined) {
         console.warn("can't find a better solution!!");
+        this.statusStack.pop(); //no steps where nothing happens
         return;
       }
       this.basis.faces[this.edgeChoice[0]].setStatus( "out", true );
@@ -605,6 +614,7 @@ Object.assign(Polyhedron.prototype, {
     } else if (this.stepState === "edgeFound") {
       this.basisChange = this.getImprovingBasisChange();
       this.basisChange[1].setStatus( "in", true );
+      moveCamera(new THREE.Vector3().addVectors(this.basis.vertex.position, this.basisChange[2]).multiplyScalar(.5));
       this.stepState = "basisChangeFound";
     } else if (this.stepState === "basisChangeFound") {
       this.basis.faces[this.edgeChoice[0]].setStatus( "out", false );
