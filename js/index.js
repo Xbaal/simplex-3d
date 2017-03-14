@@ -59,7 +59,7 @@ function displayPolyhedron() {
     polyhedron.position.copy( polyhedron.mid ).multiplyScalar( -1 );
     camera.minDistance = polyhedron.radius * 2;
     camera.maxDistance = polyhedron.radius * 5;
-    moveCamera( new THREE.Vector3(0,0,1), polyhedron.radius * 3 );
+    moveCamera( new THREE.Vector3(1,1,1), polyhedron.radius * 3 );
     scene.add(polyhedron);
   }
 }
@@ -714,24 +714,38 @@ function onWindowResize() {
 
 }
 
-function moveCamera (finalPos, dist) {
+function moveCamera (finalPos, dist, directionRight) {
+  directionRight = polyhedron.direction;
+  finalPos = finalPos.clone();
   if (cameraTween) cameraTween.stop();
   if (dist === undefined) {
     dist = camera.position.length();
   }
   var startPos = camera.position.clone();
-  var cameraUpStart = camera.up.clone();
-  var finalAngle = finalPos.angleTo( startPos );
-  var axis = new THREE.Vector3().crossVectors( startPos, finalPos ).normalize();
-
-  cameraTween = new TWEEN.Tween({ angle: 0, l: camera.position.length() })
-  .to({ angle: finalAngle, l: dist }, 500)
+  var startUp = camera.up.clone();
+  var finalPositionAngle = finalPos.angleTo( startPos );
+  var finalUpAngle = finalPositionAngle;
+  var positionAxis = new THREE.Vector3().crossVectors( startPos, finalPos ).normalize();
+  var upAxis = positionAxis.clone();
+  if (directionRight) {
+    //TODO: if crossproduct == 0
+    var finalUp = new THREE.Vector3().crossVectors( finalPos, directionRight );
+    upAxis = new THREE.Vector3().crossVectors( startUp, finalUp ).normalize();
+    finalUpAngle = finalUp.angleTo( startUp );
+    console.log(finalPos,directionRight)
+    console.log(startUp,finalUp,upAxis,finalUpAngle);
+  }
+  cameraTween = new TWEEN.Tween({ positionAngle: 0, upAngle: 0, l: camera.position.length() })
+  .to({ positionAngle: finalPositionAngle, upAngle: finalUpAngle, l: dist }, 500)
   .easing( TWEEN.Easing.Quadratic.InOut )
   .onUpdate(function() {
-    if (this.angle !== 0) {
-      var q = new THREE.Quaternion().setFromAxisAngle( axis, this.angle );
-      camera.up.copy( cameraUpStart.clone().applyQuaternion( q ) );
-      camera.position.copy( startPos.clone().applyQuaternion( q ) );
+    if (this.positionAngle !== 0) {
+      var positionQ = new THREE.Quaternion().setFromAxisAngle( positionAxis, this.positionAngle );
+      camera.position.copy( startPos.clone().applyQuaternion( positionQ ) );
+    }
+    if (this.upAngle !== 0) {
+      var upQ = new THREE.Quaternion().setFromAxisAngle( upAxis, this.upAngle );
+      camera.up.copy( startUp.clone().applyQuaternion( upQ ) );
     }
     camera.position.setLength( this.l );
   })
