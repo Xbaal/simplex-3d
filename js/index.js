@@ -3,6 +3,8 @@ var controls, scene, renderer, domEvents, stats, light, skyBox;
 var polyhedron;
 var MODELS = {};
 
+var DIRECTION_ARROW_COLOR = 0x0000ff;
+
 init();
 animate();
 
@@ -311,7 +313,7 @@ function Polyhedron(data) {
   this.faces = faces;
 
   this.direction = new THREE.Vector3(0,0,1);
-  var dirArrow = new THREE.ArrowHelper( this.direction.clone().normalize(), this.mid, this.radius, 0xffa500 );
+  var dirArrow = new THREE.ArrowHelper( this.direction.clone().normalize(), this.mid, this.radius, DIRECTION_ARROW_COLOR );
   dirArrow.visible = false;
   this.directionArrow = dirArrow;
   this.add( dirArrow );
@@ -716,6 +718,8 @@ function onWindowResize() {
 
 function moveCamera (finalPos, dist, directionRight) {
   directionRight = polyhedron.direction;
+
+  directionRight = directionRight.clone().normalize();
   finalPos = finalPos.clone();
   if (cameraTween) cameraTween.stop();
   if (dist === undefined) {
@@ -723,16 +727,19 @@ function moveCamera (finalPos, dist, directionRight) {
   }
   var startPos = camera.position.clone();
   var startUp = camera.up.clone();
+  if (directionRight) {
+    finalPos = finalPos.sub( directionRight.clone().multiplyScalar(finalPos.dot(directionRight)) );
+  }
   var finalPositionAngle = finalPos.angleTo( startPos );
   var finalUpAngle = finalPositionAngle;
   var positionAxis = new THREE.Vector3().crossVectors( startPos, finalPos ).normalize();
   var upAxis = positionAxis.clone();
   if (directionRight) {
-    //TODO: if crossproduct == 0
+    //TODO: fix: if crossproduct == 0
     var finalUp = new THREE.Vector3().crossVectors( finalPos, directionRight );
     upAxis = new THREE.Vector3().crossVectors( startUp, finalUp ).normalize();
     finalUpAngle = finalUp.angleTo( startUp );
-    console.log(finalPos,directionRight)
+    console.log(finalPos,directionRight);
     console.log(startUp,finalUp,upAxis,finalUpAngle);
   }
   cameraTween = new TWEEN.Tween({ positionAngle: 0, upAngle: 0, l: camera.position.length() })
