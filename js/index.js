@@ -726,20 +726,32 @@ function moveCamera (finalPos, dist, directionRight) {
     dist = camera.position.length();
   }
   var startPos = camera.position.clone();
+  if (startPos.lengthSq() === 0) startPos.set(1,1,1);
   var startUp = camera.up.clone();
+  if (startUp.lengthSq() === 0) startUp.set(1,1,1);
   if (directionRight) {
     finalPos = finalPos.sub( directionRight.clone().multiplyScalar(finalPos.dot(directionRight)) );
+    if (finalPos.lengthSq() === 0) {
+      finalPos = startPos.sub( directionRight.clone().multiplyScalar(startPos.dot(directionRight)) );
+    }
+    if (finalPos.lengthSq() === 0) {
+      //take some orthogonal vector to directionRight
+      if (directionRight.x !== 0 || directionRight.y !== 0) {
+        finalPos.set( -directionRight.y, directionRight.x, 0 );
+      } else {
+        finalPos.set(1,0,0);
+      }
+    }
   }
-  var finalPositionAngle = finalPos.angleTo( startPos );
-  var finalUpAngle = finalPositionAngle;
   var positionAxis = new THREE.Vector3().crossVectors( startPos, finalPos ).normalize();
+  var finalPositionAngle = finalPos.angleTo( startPos );
   var upAxis = positionAxis.clone();
-  if (directionRight) {
-    //TODO: fix: if crossproduct == 0
-    var finalUp = new THREE.Vector3().crossVectors( finalPos, directionRight );
+  var finalUpAngle = finalPositionAngle;
+  if (directionRight && directionRight.lengthSq() !== 0) {
+    var finalUp = new THREE.Vector3().crossVectors( finalPos, directionRight ); // can't be 0
     upAxis = new THREE.Vector3().crossVectors( startUp, finalUp ).normalize();
     finalUpAngle = finalUp.angleTo( startUp );
-    console.log(finalPos,directionRight);
+    console.log(startPos,finalPos,directionRight);
     console.log(startUp,finalUp,upAxis,finalUpAngle);
   }
   cameraTween = new TWEEN.Tween({ positionAngle: 0, upAngle: 0, l: camera.position.length() })
