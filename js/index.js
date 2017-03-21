@@ -3,6 +3,8 @@ var controls, scene, renderer, domEvents, stats, light, skyBox;
 var polyhedron;
 var MODELS = {};
 
+var eps = Math.pow( 2, -52 );
+
 var DIRECTION_ARROW_COLOR = 0x0000ff;
 
 init();
@@ -171,6 +173,7 @@ Object.assign(Edge.prototype, {
 });
 
 function Face(vertices, id, normal, scale) {
+  var i;
   //this class assumes, that the vertices are coplanar
   this.vertices = vertices;
   this.faceId = id;
@@ -179,6 +182,34 @@ function Face(vertices, id, normal, scale) {
     in: false,
     out: false
   };
+
+  if (vertices.length > 3) {
+    //sort vertices to make it possible to easily create the tiled polygon
+    //the sorting order
+    var newOrder = [vertices[0],vertices[1]];
+    var verticesLeft = vertices.slice(2);
+    var origin = vertices[0].position;
+    var refVector = vertices[1].position.clone().sub( origin );
+    if (!(normal instanceof THREE.Vector3)) {
+      normal = new THREE.Vector3().crossVectors( refVector, vertices[2].position.clone().sub( origin ) );
+    }
+    verticesLeft.sort(function(a,b) {
+      var angleA = refVector.angleTo(a.position.clone().sub(origin));
+      var angleB = refVector.angleTo(b.position.clone().sub(origin));
+      return angleA - angleB;
+    });
+    for (i = 0; i < verticesLeft.length; i++) {
+      var v = verticesLeft[i].position.clone().sub(origin);
+      var n = new THREE.Vector3().crossVectors( refVector, v );
+      if (n.dot(normal) > 0) {
+        newOrder.push( verticesLeft[i] );
+      } else {
+        newOrder.splice( 1, 0, verticesLeft[i] );
+      }
+    }
+    vertices = newOrder;
+  }
+
   var geometry = new THREE.Geometry();
   geometry.vertices = vertices.map(function(v) {
     return v.position;
@@ -207,10 +238,9 @@ function Face(vertices, id, normal, scale) {
   if (vertices.length >= 3) {
     this.faceType = "face";
     var subFace;
-    for (var i = 0; i < vertices.length - 2; i++) {
+    for (i = 0; i < vertices.length - 2; i++) {
       subFace = new THREE.Face3( 0, i + 1, i + 2 );
-      subFace.color = new THREE.Color( 0xffffff );
-      geometry.faces.push(subFace);
+      geometry.faces.push( subFace );
     }
     geometry.computeFaceNormals();
     THREE.Mesh.call( this, geometry, this.faceMaterial );
@@ -225,7 +255,7 @@ function Face(vertices, id, normal, scale) {
   this.b = this.a.dot( vertices[0].position );
   console.log("face inequaltiy:",this.a.x + "*x + " + this.a.y + "*y + " + this.a.z + "*z <= " + this.b);
 
-  this.visible = false;
+  this.updateMaterial();
 }
 Face.prototype = Object.create(THREE.Mesh.prototype);
 Face.prototype.constructor = Face;
@@ -248,14 +278,14 @@ Object.assign(Face.prototype, {
       this.visible = true;
       this.material = this.Material.active;
     } else {
-      this.visible = false;
+      this.visible = true;
       this.material = this.Material.standard;
     }
   }
 });
 
 function Polyhedron(data) {
-  THREE.Object3D.call(this);
+  THREE.Group.call(this);
   if (typeof data.normal !== "object") {
     data.normal = {};
   }
@@ -277,6 +307,9 @@ function Polyhedron(data) {
   this.radius = data.vertex.reduce(function(max,v) {
     return Math.max( max, new THREE.Vector3( v[0], v[1], v[2] ).distanceTo( this.mid ) );
   }.bind(this), 0);
+  if (this.radius === 0) {
+    this.radius = 1;
+  }
 
   var vertices = [];
   for (i = 0; i < data.vertex.length; i++) {
@@ -312,7 +345,10 @@ function Polyhedron(data) {
   }
   this.faces = faces;
 
-  this.direction = new THREE.Vector3(0,0,1);
+  this.direction = new THREE.Vector3(0,0,-1);
+  if (data.c) {
+    this.direction.set( data.c[0], data.c[1], data.c[2] );
+  }
   var dirArrow = new THREE.ArrowHelper( this.direction.clone().normalize(), this.mid, this.radius, DIRECTION_ARROW_COLOR );
   dirArrow.visible = false;
   this.directionArrow = dirArrow;
@@ -327,12 +363,10 @@ function Polyhedron(data) {
     this.basis = null;
   }
 }
-Polyhedron.prototype = Object.create(THREE.Object3D.prototype);
+Polyhedron.prototype = Object.create(THREE.Group.prototype);
 Polyhedron.prototype.constructor = Polyhedron;
 Object.assign(Polyhedron.prototype, {
   hToV: function (inequalities) {
-    var eps = Math.pow( 2, -52 );
-
     var A = [];
     var b = [];
     var faceVertices = [];
@@ -380,21 +414,32 @@ Object.assign(Polyhedron.prototype, {
         }
       }
     }
-    for (i = 0; i < vertices.length; i++) {
-      vertices[i] = vertices[i].toArray();
-    }
     var edges = [];
+    var rays = [];
     for (i = 0; i < faceVertices.length; i++) {
       for (j = i + 1; j < faceVertices.length; j++) {
         var sharedVertices = faceVertices[i].filter(function(vertexId) {
           return faceVertices[j].indexOf(vertexId) > -1;
         });
-        if (sharedVertices.length === 2) {
+        if (sharedVertices.length === 1) {
+          //TODO: check if ray calculation works
+          var vertexId = sharedVertices[0];
+          var rayDirection = new THREE.Vector3().crossVectors( A[i], A[j] );
+          var v = vertices[vertexId].clone().add(rayDirection);
+          A.every(function(a, index){
+            return a.dot( v ) <= b[index] + eps;
+          }) || rayDirection.multiplyScalar(-1);
+          rays.push( [vertex, rayDirection.toArray()] );
+        } else if (sharedVertices.length === 2) {
           edges.push( sharedVertices );
         } else if (sharedVertices.length > 2) {
           //same face
         }
       }
+    }
+
+    for (i = 0; i < vertices.length; i++) {
+      vertices[i] = vertices[i].toArray();
     }
     var normals = A.map(function(a){
       return a.toArray();
@@ -402,12 +447,14 @@ Object.assign(Polyhedron.prototype, {
     console.log({
       vertex: vertices,
       edge: edges,
+      rays: rays,
       face: faceVertices,
       normal: normals
     });
     return {
       vertex: vertices,
       edge: edges,
+      rays: rays,
       face: faceVertices,
       normal: normals
     };
@@ -528,7 +575,7 @@ Object.assign(Polyhedron.prototype, {
     });
     if (bestLambda[0] === Infinity) {
       console.warn("[improvingEdges] The polyhedron is unbounded");
-      return;
+      return "unbounded";
     }
     bestLambda[1].forEach(function(face) {
       var newVertexPosition = s.clone().multiplyScalar(bestLambda[0]).add(v);
@@ -591,40 +638,64 @@ Object.assign(Polyhedron.prototype, {
     moveCamera( s.cameraPosition );
   },
   makeStep: function() {
+
+    var BASIS_FOUND = 0;
+    var FIND_BASIS = 1;
+    var OPTIMUM_FOUND = 2;
+    var UNBOUNDED_PROBLEM = 3;
+    var EDGE_FOUND = 4;
+    var BASIS_CHANGE_FOUND = 5;
+
     if (!this.stepState) {
       if (this.basis) {
-        this.stepState = "basisFound";
+        this.stepState = BASIS_FOUND;
       } else {
-        this.stepState = "findBasis";
+        this.stepState = FIND_BASIS;
       }
     }
     this.backupStatus();
-    if (this.stepState === "findBasis") {
-      this.statusStack.pop(); //there is no reason to go back to the empty beginning state
+    var noStep = false;
+    if (this.stepState === FIND_BASIS) {
+      noStep = true; //there is no reason to go back to the empty beginning state
       var randomVertex = this.vertices[Math.floor(Math.random() * this.vertices.length)];
       this.basis = this.getBasisForVertex( randomVertex ).setActive();
-      this.stepState = "basisFound";
-    } else if (this.stepState === "basisFound") {
+      this.stepState = BASIS_FOUND;
+    } else if (this.stepState === BASIS_FOUND) {
       this.edgeChoice = this.getImprovingEdge();
       if (this.edgeChoice === undefined) {
         console.warn("can't find a better solution!!");
-        this.statusStack.pop(); //no steps where nothing happens
+        this.stepState = OPTIMUM_FOUND;
+        noStep = true;
         return;
       }
       this.basis.faces[this.edgeChoice[0]].setStatus( "out", true );
-      this.stepState = "edgeFound";
-    } else if (this.stepState === "edgeFound") {
+      this.stepState = EDGE_FOUND;
+    } else if (this.stepState === EDGE_FOUND) {
       this.basisChange = this.getImprovingBasisChange();
+      if (this.basisChange === "unbounded") {
+        console.warn("The problem is unbounded");
+        this.stepState = UNBOUNDED_PROBLEM;
+        noStep = true;
+        return;
+      }
       this.basisChange[1].setStatus( "in", true );
       moveCamera(new THREE.Vector3().addVectors(this.basis.vertex.position, this.basisChange[2]).multiplyScalar(.5));
-      this.stepState = "basisChangeFound";
-    } else if (this.stepState === "basisChangeFound") {
+      this.stepState = BASIS_CHANGE_FOUND;
+    } else if (this.stepState === BASIS_CHANGE_FOUND) {
       this.basis.faces[this.edgeChoice[0]].setStatus( "out", false );
       this.basisChange[1].setStatus( "in", false );
       console.log("basis change:",change);
       var change = this.basisChange;
       this.basis.changeBasis( change[0], change[1] ).setActive();
-      this.stepState = "basisFound";
+      this.stepState = BASIS_FOUND;
+    } else if (this.stepState === OPTIMUM_FOUND) {
+      noStep = true;
+    } else if (this.stepState === UNBOUNDED_PROBLEM) {
+      noStep = true;
+    }
+
+    if (noStep) {
+      this.statusStack.pop();
     }
   },
   rewindStep: function() {
@@ -751,7 +822,8 @@ function moveCamera (finalPos, dist, directionRight) {
     var finalUp = new THREE.Vector3().crossVectors( finalPos, directionRight ); // can't be 0
     upAxis = new THREE.Vector3().crossVectors( startUp, finalUp ).normalize();
     finalUpAngle = finalUp.angleTo( startUp );
-    console.log(startPos,finalPos,directionRight);
+    console.log("moveCamera data:");
+    console.log(startPos,finalPos,directionRight,finalPositionAngle);
     console.log(startUp,finalUp,upAxis,finalUpAngle);
   }
   cameraTween = new TWEEN.Tween({ positionAngle: 0, upAngle: 0, l: camera.position.length() })
@@ -767,6 +839,10 @@ function moveCamera (finalPos, dist, directionRight) {
       camera.up.copy( startUp.clone().applyQuaternion( upQ ) );
     }
     camera.position.setLength( this.l );
+  })
+  .onComplete(function(){
+    camera.position.copy( finalPos ).setLength( dist );
+    //if (finalUp) camera.up.copy( finalUp );
   })
   .start();
 }
