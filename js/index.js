@@ -7,6 +7,13 @@ var eps = Math.pow( 2, -52 );
 
 var DIRECTION_ARROW_COLOR = 0x0000ff;
 
+var BASIS_FOUND = 0;
+var FIND_BASIS = 1;
+var OPTIMUM_FOUND = 2;
+var UNBOUNDED_PROBLEM = 3;
+var EDGE_FOUND = 4;
+var BASIS_CHANGE_FOUND = 5;
+
 init();
 animate();
 
@@ -93,17 +100,21 @@ function Vertex(vector, id, scale) {
   THREE.Mesh.call(this, this.geometry, this.standardMaterial);
   this.status = {
     hover: false,
-    active: false
+    active: false,
+    visited: false,
+    start: false
   };
   this.vertexId = id;
   this.position.copy( vector );
   this.scale.multiplyScalar(scale);
   domEvents.addEventListener(this, "click", function() {
+    if (polyhedron.stepState !== FIND_BASIS) return;
     polyhedron.resetStatus();
     console.log("clicked on: vertexId",this.vertexId);
-    polyhedron.basis = polyhedron.getBasisForVertex( polyhedron.vertices[this.vertexId] ).setActive();
+    polyhedron.basis = polyhedron.getBasisForVertex( this ).setActive();
   }.bind(this), false);
   domEvents.addEventListener(this, "mouseover", function() {
+    if (polyhedron.stepState !== FIND_BASIS) return;
     this.setStatus( "hover", true );
   }.bind(this), false);
   domEvents.addEventListener(this, "mouseout", function() {
@@ -115,12 +126,18 @@ Vertex.prototype.constructor = Vertex;
 Object.assign(Vertex.prototype, PolyhedronMesh);
 Object.assign(Vertex.prototype, {
   geometry: new THREE.SphereGeometry( 6, 12, 6 ),
-  standardMaterial: new THREE.MeshLambertMaterial({ color: 0x222244 }),
-  hoverMaterial: new THREE.MeshLambertMaterial({ color: 0x444488 }),
   activeMaterial: new THREE.MeshLambertMaterial({ color: 0xff0000 }),
+  startMaterial: new THREE.MeshLambertMaterial({ color: 0x00aa00 }),
+  visitedMaterial: new THREE.MeshLambertMaterial({ color: 0xaaaaaa }),
+  hoverMaterial: new THREE.MeshLambertMaterial({ color: 0x444488 }),
+  standardMaterial: new THREE.MeshLambertMaterial({ color: 0x222244 }),
   updateMaterial: function() {
     if (this.status.active) {
       this.material = this.activeMaterial;
+    } else if (this.status.start) {
+      this.material = this.startMaterial;
+    } else if (this.status.visited) {
+      this.material = this.visitedMaterial;
     } else if (this.status.hover) {
       this.material = this.hoverMaterial;
     } else {
@@ -133,10 +150,12 @@ function Edge(vertex1, vertex2, scale) {
   this.vertices = [vertex1, vertex2];
   var direction = new THREE.Vector3().subVectors(vertex2.position, vertex1.position);
   var arrow = new THREE.ArrowHelper(direction.clone().normalize(), vertex1.position);
-  var edgeGeometry = new THREE.CylinderGeometry( 2, 2, direction.length(), 8, 4 );
+  var radius = 1, radiusSegments = 8, heightSegments = 1;
+  var edgeGeometry = new THREE.CylinderGeometry( radius, radius, direction.length(), radiusSegments, heightSegments );
   this.status = {
     hover: false,
-    improving: false
+    improving: false,
+    visited: false
   };
   THREE.Mesh.call( this, edgeGeometry, this.standardMaterial );
   this.position.addVectors( vertex1.position, direction.multiplyScalar(0.5) );
@@ -147,12 +166,12 @@ function Edge(vertex1, vertex2, scale) {
   //domEvents.addEventListener(this, "click", function() {
   //  edge.setStatus( "improving", !edge.status.improving );
   //}.bind(this), false);
-  domEvents.addEventListener(this, "mouseover", function() {
-    this.setStatus( "hover", true );
-  }.bind(this), false);
-  domEvents.addEventListener(this, "mouseout", function() {
-    this.setStatus( "hover", false );
-  }.bind(this), false);
+  // domEvents.addEventListener(this, "mouseover", function() {
+  //   this.setStatus( "hover", true );
+  // }.bind(this), false);
+  // domEvents.addEventListener(this, "mouseout", function() {
+  //   this.setStatus( "hover", false );
+  // }.bind(this), false);
 }
 Edge.prototype = Object.create(THREE.Mesh.prototype);
 Edge.prototype.constructor = Edge;
@@ -161,8 +180,11 @@ Object.assign(Edge.prototype, {
   standardMaterial: new THREE.MeshLambertMaterial({ color: 0x666666 }),
   hoverMaterial: new THREE.MeshLambertMaterial({ color: 0xcccccc }),
   improvingMaterial: new THREE.MeshLambertMaterial({ color: 0x00aa00 }),
+  visitedMaterial: new THREE.MeshLambertMaterial({ color: 0xcccccc }),
   updateMaterial: function () {
-    if (this.status.improving) {
+    if (this.status.visited) {
+      this.material = this.visitedMaterial;
+    } else if (this.status.improving) {
       this.material = this.improvingMaterial;
     } else if (this.status.hover) {
       this.material = this.hoverMaterial;
@@ -182,6 +204,13 @@ function Face(vertices, id, normal, scale) {
     in: false,
     out: false
   };
+
+  if (!normal && vertices.length < 3) {
+    throw new Error("Faces with less than 3 vertices must have a normal defined!");
+  }
+  if (normal instanceof Array) {
+    normal = new THREE.Vector3(normal[0], normal[1], normal[2]);
+  }
 
   if (vertices.length > 3) {
     //sort vertices to make it possible to easily create the tiled polygon
@@ -214,12 +243,6 @@ function Face(vertices, id, normal, scale) {
   geometry.vertices = vertices.map(function(v) {
     return v.position;
   });
-  if (!normal && vertices.length < 3) {
-    throw new Error("Faces with less than 3 vertices must have a normal defined!");
-  }
-  if (normal instanceof Array) {
-    normal = new THREE.Vector3(normal[0], normal[1], normal[2]);
-  }
   if (vertices.length === 1) {
     this.faceType = "plane";
     geometry = new THREE.PlaneGeometry( 100 * scale, 100 * scale );
@@ -229,7 +252,6 @@ function Face(vertices, id, normal, scale) {
   if (vertices.length === 2) {
     this.faceType = "plane";
     var edgeLength = vertices[0].position.distanceTo( vertices[1].position );
-    console.log(edgeLength);
     geometry = new THREE.PlaneGeometry( edgeLength + 200 * scale, 100 * scale );
     THREE.Mesh.call(this, geometry, this.planeMaterial);
     this.position.addVectors( vertices[0].position, vertices[1].position ).multiplyScalar( .5 );
@@ -256,6 +278,10 @@ function Face(vertices, id, normal, scale) {
   console.log("face inequaltiy:",this.a.x + "*x + " + this.a.y + "*y + " + this.a.z + "*z <= " + this.b);
 
   this.updateMaterial();
+
+  domEvents.addEventListener(this, "click", function() {
+    console.log("faceId:", this.faceId);
+  }.bind(this), false);
 }
 Face.prototype = Object.create(THREE.Mesh.prototype);
 Face.prototype.constructor = Face;
@@ -358,9 +384,16 @@ function Polyhedron(data) {
     this.basis = new Basis(data.basis.map(function(faceIndex) {
       return faces[faceIndex];
     }), this).setActive();
-    console.log(this.basis);
+    this.basis.vertex.setStatus( "start", true );
+    this.stepState = BASIS_FOUND;
   } else {
     this.basis = null;
+    this.stepState = FIND_BASIS;
+  }
+
+  this.pivotRule = "Random";
+  if (data.pivotRule && (data.pivotRule in this.PivotRules)) {
+    this.pivotRule = data.pivotRule;
   }
 }
 Polyhedron.prototype = Object.create(THREE.Group.prototype);
@@ -520,68 +553,99 @@ Object.assign(Polyhedron.prototype, {
     }
     return best[1];
   },
-  getImprovingEdge: function() {
+  getValidBasisChanges: function() {
     var p = this;
     var basis = p.basis;
     if (!basis.vertex) {
-      console.error("[getImprovingEdges] invalid basis (no vertex identified)");
+      console.error("[getValidBasisChanges] invalid basis");
       return [];
     }
-    var bestEdges = [0, []];
+    var v = basis.vertex.position;
+    var basisChanges = [];
     for (var index = 0; index < basis.edgeDirections.length; index++) {
       var s = basis.edgeDirections[index];
       var sc = s.dot( p.direction );
-      console.log("i=", basis.faces[index].faceId, "s" + index, s, "* c", p.direction, "=", sc);
-      if (sc > 0) basis.faces[index].setStatus( "bad", true );
-      if (sc >= bestEdges[0]) {
-        if (sc > bestEdges[0]) {
-          console.log("better i_raus");
-          bestEdges = [sc, [[index,s]]];
-        } else if (bestEdges[1][0] && basis.faces[bestEdges[1][0][0]].faceId > basis.faces[index].faceId) {
-          //take edge with lowest Id
-          console.log("i_raus with lower id");
-          bestEdges = [sc, [[index,s]]];
+      if (sc <= 0) continue;
+
+      var bestLambda = [Infinity,[]];
+      p.faces.forEach(function(face) {
+        var as = face.a.dot(s);
+        if (as <= 0) return;
+        for (var i = 0; i < basis.faces.length; i++) {
+          if (basis.faces[i] === face) return;
         }
+        var lambda = ( face.b - face.a.dot(v) ) / face.a.dot(s);
+        if (lambda <= bestLambda[0]) {
+          if (lambda < bestLambda[0]) {
+            bestLambda = [lambda,[]];
+          }
+          bestLambda[1].push({
+            face: face,
+            as: as
+          });
+        }
+      });
+      if (bestLambda[0] === Infinity) {
+        console.warn("[getValidBasisChanges] The polyhedron is unbounded");
+        return "unbounded";
+      }
+
+      for (var i = 0; i < bestLambda[1].length; i++) {
+        var b = bestLambda[1][i];
+        var newVertex = basis.clone().changeBasis(index,b.face).vertex;
+        if (newVertex === null) {
+          console.log("filtered a step which is not allowed in the Mesh");
+          continue;
+        }
+        basisChanges.push({
+          direction: s,
+          lambda: bestLambda[0],
+          sc: sc,
+          sa: b.sa,
+          idOut: basis.faces[index].faceId,
+          idIn: b.face.faceId,
+          faceOut: basis.faces[index],
+          faceIn: b.face,
+          edge: p.getEdgeFromVertices([basis.vertex,newVertex]),
+          halfEdgePosition: s.clone().multiplyScalar(bestLambda[0] / 2).add(v),
+          newVertex: newVertex,
+          basisIndexOut: index,
+          basis: basis
+        });
       }
     }
-    return bestEdges[1][0];
+    if (basisChanges.length === 0) {
+      return "optimum";
+    }
+    return basisChanges;
   },
-  getImprovingBasisChange: function() {
-    var p = this;
-    var edgeChoice = p.edgeChoice;
-    var basis = p.basis;
-    var v = basis.vertex.position;
-    var improvingBasisChanges = [];
-    var index = edgeChoice[0];
-    var s = edgeChoice[1];
-    var bestLambda = [Infinity,[]];
-    p.faces.forEach(function(face) {
-      if (face.a.dot(s) <= 0) return;
-      for (var i = 0; i < basis.faces.length; i++) {
-        if (basis.faces[i] === face) return;
-      }
-      var lambda = ( face.b - face.a.dot(v) ) / face.a.dot(s);
-      console.log("trying face ",face.faceId,"lamda",lambda);
-      if (lambda <= bestLambda[0]) {
-        if (lambda < bestLambda[0]) {
-          console.log("better i_rein");
-          bestLambda = [lambda,[face]];
-        } else if (bestLambda[1][0].faceId < face.faceId) {
-          console.log("i_rein with higher id");
-          bestLambda = [lambda,[face]];
-        }
-        //bestLambda[1].push(face);
-      }
-    });
-    if (bestLambda[0] === Infinity) {
-      console.warn("[improvingEdges] The polyhedron is unbounded");
-      return "unbounded";
+  PivotRules: {
+    DantzigMinMax: function(validBasisChanges) {
+      return validBasisChanges.reduce(function(best, current) {
+        var sc = best.sc - current.sc; //bigger "sc" is better
+        var idOut = current.idOut - best.idOut; //smaller "idOut" is better
+        var idIn = best.idIn - current.idIn; //bigger "idIn" is better
+        if ((sc || idOut || idIn) > 0) return best;
+        return current;
+      });
+    },
+    Random: function(validBasisChanges) {
+      return validBasisChanges[Math.floor(Math.random() * validBasisChanges.length)];
+    },
+    MinimalProgress: function(validBasisChanges) {
+      return validBasisChanges.reduce(function(best, current) {
+        if (best.sc * best.lambda < current.sc * current.lambda) return best;
+        return current;
+      });
+    },
+    Bland: function(validBasisChanges) {
+      return validBasisChanges.reduce(function(best, current) {
+        var idOut = current.idOut - best.idOut; //smaller "idOut" is better
+        var idIn = current.idIn - best.idIn; //smaller "idIn" is better
+        if ((idOut || idIn) > 0) return best;
+        return current;
+      });
     }
-    bestLambda[1].forEach(function(face) {
-      var newVertexPosition = s.clone().multiplyScalar(bestLambda[0]).add(v);
-      improvingBasisChanges.push( [index,face,newVertexPosition] );
-    });
-    return improvingBasisChanges[0];
   },
   setStatus: function(status) {
     var polyhedron = this;
@@ -619,7 +683,6 @@ Object.assign(Polyhedron.prototype, {
     var s = {};
     s.stepState = this.stepState;
     s.basisFaces = this.basis && this.basis.faces.slice();
-    s.edgeChoice = this.edgeChoice;
     s.basisChange = this.basisChange;
     s.viewStatus = this.getStatus();
     s.cameraPosition = camera.position.clone();
@@ -627,70 +690,69 @@ Object.assign(Polyhedron.prototype, {
   },
   rebuildStatus: function(s) {
     this.stepState = s.stepState;
-    this.edgeChoice = s.edgeChoice;
     this.basisChange = s.basisChange;
     this.setStatus( s.viewStatus );
     if (s.basisFaces) {
       this.basis = new Basis( s.basisFaces, this ).setActive();
     } else {
-      this.basis = new Basis( [], this ).setActive();
+      this.basis = new Basis( [], this ).setActive(); //setActive resets the other active-marked objects
     }
     moveCamera( s.cameraPosition );
   },
   makeStep: function() {
 
-    var BASIS_FOUND = 0;
-    var FIND_BASIS = 1;
-    var OPTIMUM_FOUND = 2;
-    var UNBOUNDED_PROBLEM = 3;
-    var EDGE_FOUND = 4;
-    var BASIS_CHANGE_FOUND = 5;
-
-    if (!this.stepState) {
-      if (this.basis) {
-        this.stepState = BASIS_FOUND;
-      } else {
-        this.stepState = FIND_BASIS;
-      }
+    if (this.stepState === undefined) {
+      this.stepState = FIND_BASIS;
     }
     this.backupStatus();
+
+    if (this.basis && this.basis.vertex && this.stepState === FIND_BASIS) {
+      this.basis.vertex.setStatus( "start", true );
+      this.stepState = BASIS_FOUND;
+    }
+
     var noStep = false;
     if (this.stepState === FIND_BASIS) {
-      noStep = true; //there is no reason to go back to the empty beginning state
       var randomVertex = this.vertices[Math.floor(Math.random() * this.vertices.length)];
       this.basis = this.getBasisForVertex( randomVertex ).setActive();
+      this.basis.vertex.setStatus( "start", true );
       this.stepState = BASIS_FOUND;
     } else if (this.stepState === BASIS_FOUND) {
-      this.edgeChoice = this.getImprovingEdge();
-      if (this.edgeChoice === undefined) {
+      var validBasisChanges = this.getValidBasisChanges();
+      if (validBasisChanges === "optimum") {
         console.warn("can't find a better solution!!");
         this.stepState = OPTIMUM_FOUND;
         noStep = true;
         return;
-      }
-      this.basis.faces[this.edgeChoice[0]].setStatus( "out", true );
-      this.stepState = EDGE_FOUND;
-    } else if (this.stepState === EDGE_FOUND) {
-      this.basisChange = this.getImprovingBasisChange();
-      if (this.basisChange === "unbounded") {
+      } else if (validBasisChanges === "unbounded") {
         console.warn("The problem is unbounded");
         this.stepState = UNBOUNDED_PROBLEM;
         noStep = true;
         return;
       }
-      this.basisChange[1].setStatus( "in", true );
-      moveCamera(new THREE.Vector3().addVectors(this.basis.vertex.position, this.basisChange[2]).multiplyScalar(.5));
+      this.basisChange = this.PivotRules[this.pivotRule](validBasisChanges);
+      this.basisChange.faceOut.setStatus( "out", true );
+      this.stepState = EDGE_FOUND;
+    } else if (this.stepState === EDGE_FOUND) {
+      this.basisChange.faceIn.setStatus( "in", true );
+      moveCamera(this.basisChange.halfEdgePosition);
       this.stepState = BASIS_CHANGE_FOUND;
     } else if (this.stepState === BASIS_CHANGE_FOUND) {
-      this.basis.faces[this.edgeChoice[0]].setStatus( "out", false );
-      this.basisChange[1].setStatus( "in", false );
-      console.log("basis change:",change);
-      var change = this.basisChange;
-      this.basis.changeBasis( change[0], change[1] ).setActive();
+      this.basisChange.faceOut.setStatus( "out", false );
+      this.basisChange.faceIn.setStatus( "in", false );
+      if (this.basisChange.edge) {
+        this.basisChange.edge.setStatus( "visited", true );
+      }
+      this.basis.vertex.setStatus( "visited", true );
+      console.log("basis change:",this.basisChange);
+      this.basis.changeBasis( this.basisChange.basisIndexOut, this.basisChange.faceIn ).setActive();
       this.stepState = BASIS_FOUND;
     } else if (this.stepState === OPTIMUM_FOUND) {
+      console.log("the algorithm has terminated, because a optimal point was found");
       noStep = true;
     } else if (this.stepState === UNBOUNDED_PROBLEM) {
+      console.log("the algorithm has terminated, because the polyhedron is unbounded \
+      in direction of the optimization direction");
       noStep = true;
     }
 
@@ -698,8 +760,12 @@ Object.assign(Polyhedron.prototype, {
       this.statusStack.pop();
     }
   },
-  rewindStep: function() {
-    var oldStatus = this.statusStack.pop();
+  rewindStep: function(index) {
+    if (index === undefined) index = this.statusStack.length - 1;
+    var oldStatus;
+    while (this.statusStack.length > index) {
+      oldStatus = this.statusStack.pop();
+    }
     if (!oldStatus) {
       console.warn("There is no previous status");
       return;
@@ -719,6 +785,8 @@ function Basis (basisFaces, p) {
   this.vertices = this.polyhedron.sharedVertices(basisFaces);
   if (this.vertices.length === 1) {
     this.vertex = this.vertices[0];
+  } else {
+    this.vertex = null;
   }
   if (basisFaces.length === 3) {
     var elements = [];
@@ -766,15 +834,13 @@ function Basis (basisFaces, p) {
   };
 
   this.changeBasis = function (indexOut, newFace) {
-    console.log("changing basis, current faces:",this.faces);
-    this.polyhedron.vertex && this.polyhedron.vertex.setStatus( "active", false );
-    this.faces[indexOut].setStatus( "active", false );
-    for (var i = 0; i < this.faces.length; i++) {
-      this.faces[i].setStatus( "bad", false );
-    }
     this.faces.splice( indexOut, 1, newFace );
     Basis.call(this, this.faces, this.polyhedron);
     return this;
+  };
+
+  this.clone = function() {
+    return new Basis(this.faces.slice(), this.polyhedron);
   };
 }
 
@@ -788,9 +854,11 @@ function onWindowResize() {
 }
 
 function moveCamera (finalPos, dist, directionRight) {
-  directionRight = polyhedron.direction;
+  //directionRight = polyhedron.direction;
 
-  directionRight = directionRight.clone().normalize();
+  if (directionRight instanceof THREE.Vector3) {
+    directionRight = directionRight.clone().normalize();
+  }
   finalPos = finalPos.clone();
   if (cameraTween) cameraTween.stop();
   if (dist === undefined) {
