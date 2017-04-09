@@ -1,5 +1,5 @@
 var camera, cameraTween;
-var controls, scene, renderer, domEvents, stats, light, skyBox;
+var controls, scene, renderer, domEvents, stats;
 var polyhedron;
 var MODELS = {};
 
@@ -38,7 +38,6 @@ function init() {
   if ( Detector.webgl ) {
     renderer = new THREE.WebGLRenderer({ antialias: true });
   } else {
-    //TODO: make the CanvasRenderer work properly or remove it
     renderer = new THREE.CanvasRenderer();
   }
   renderer.setSize(SCREEN_WIDTH, SCREEN_HEIGHT);
@@ -50,13 +49,10 @@ function init() {
   controls = new THREE.TrackballControls(camera, renderer.domElement);
   controls.noPan = true;
   // LIGHT
-  light = new THREE.AmbientLight(0x222222, 7);
-  scene.add( light );
-  // SKYBOX
-  var skyBoxGeometry = new THREE.CubeGeometry(8000, 8000, 8000);
-  var skyBoxMaterial = new THREE.MeshBasicMaterial({ color: 0xccccff, side: THREE.BackSide });
-  skyBox = new THREE.Mesh(skyBoxGeometry, skyBoxMaterial);
-  scene.add(skyBox);
+  //var light = new THREE.AmbientLight(0x222222, 7);
+  //scene.add( light );
+  // BACKGROUND
+  scene.background = new THREE.Color( 0xccccff );
 
   window.addEventListener("resize", onWindowResize, false);
 
