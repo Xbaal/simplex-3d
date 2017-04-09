@@ -66,7 +66,8 @@ function displayPolyhedron() {
     polyhedron.position.copy( polyhedron.mid ).multiplyScalar( -1 );
     camera.minDistance = polyhedron.radius * 2;
     camera.maxDistance = polyhedron.radius * 5;
-    moveCamera( new THREE.Vector3(1,1,1), polyhedron.radius * 3 );
+    camera.position.setLength(polyhedron.radius * 3);
+    if (polyhedron.basis) polyhedron.basis.setActive();
     scene.add(polyhedron);
   }
 }
@@ -121,12 +122,12 @@ Vertex.prototype = Object.create(THREE.Mesh.prototype);
 Vertex.prototype.constructor = Vertex;
 Object.assign(Vertex.prototype, PolyhedronMesh);
 Object.assign(Vertex.prototype, {
-  geometry: new THREE.SphereGeometry( 6, 12, 6 ),
-  activeMaterial: new THREE.MeshLambertMaterial({ color: 0xff0000 }),
-  startMaterial: new THREE.MeshLambertMaterial({ color: 0x00aa00 }),
-  visitedMaterial: new THREE.MeshLambertMaterial({ color: 0xaaaaaa }),
-  hoverMaterial: new THREE.MeshLambertMaterial({ color: 0x444488 }),
-  standardMaterial: new THREE.MeshLambertMaterial({ color: 0x222244 }),
+  geometry: new THREE.SphereGeometry( 5, 20, 10 ),
+  activeMaterial: new THREE.MeshBasicMaterial({ color: 0xff0000, overdraw: 0.5 }),
+  startMaterial: new THREE.MeshBasicMaterial({ color: 0x00aa00, overdraw: 0.5 }),
+  visitedMaterial: new THREE.MeshBasicMaterial({ color: 0xaaaaaa, overdraw: 0.5 }),
+  hoverMaterial: new THREE.MeshBasicMaterial({ color: 0x444488, overdraw: 0.5 }),
+  standardMaterial: new THREE.MeshBasicMaterial({ color: 0x222244, overdraw: 0.5 }),
   updateMaterial: function() {
     if (this.status.active) {
       this.material = this.activeMaterial;
@@ -173,10 +174,10 @@ Edge.prototype = Object.create(THREE.Mesh.prototype);
 Edge.prototype.constructor = Edge;
 Object.assign(Edge.prototype, PolyhedronMesh);
 Object.assign(Edge.prototype, {
-  standardMaterial: new THREE.MeshLambertMaterial({ color: 0x666666 }),
-  hoverMaterial: new THREE.MeshLambertMaterial({ color: 0xcccccc }),
-  improvingMaterial: new THREE.MeshLambertMaterial({ color: 0x00aa00 }),
-  visitedMaterial: new THREE.MeshLambertMaterial({ color: 0xcccccc }),
+  standardMaterial: new THREE.MeshBasicMaterial({ color: 0x666666, overdraw: 0.5 }),
+  hoverMaterial: new THREE.MeshBasicMaterial({ color: 0xcccccc, overdraw: 0.5 }),
+  visitedMaterial: new THREE.MeshBasicMaterial({ color: 0xcccccc, overdraw: 0.5 }),
+  improvingMaterial: new THREE.MeshBasicMaterial({ color: 0x00aa00, overdraw: 0.5 }),
   updateMaterial: function () {
     if (this.status.visited) {
       this.material = this.visitedMaterial;
@@ -371,7 +372,7 @@ function Polyhedron(data) {
   if (data.c) {
     this.direction.set( data.c[0], data.c[1], data.c[2] );
   }
-  var dirArrow = new THREE.ArrowHelper( this.direction.clone().normalize(), this.mid, this.radius, DIRECTION_ARROW_COLOR );
+  var dirArrow = new THREE.ArrowHelper( this.direction.clone().normalize(), this.mid, 0.5 * this.radius, DIRECTION_ARROW_COLOR, 0.2 * this.radius, 0.06 * this.radius );
   dirArrow.visible = false;
   this.directionArrow = dirArrow;
   this.add( dirArrow );
@@ -590,7 +591,7 @@ Object.assign(Polyhedron.prototype, {
         var b = bestLambda[1][i];
         var newVertex = basis.clone().changeBasis(index,b.face).vertex;
         if (newVertex === null) {
-          console.log("filtered a step which is not allowed in the Mesh");
+          //console.log("filtered a step which is not allowed in the Mesh");
           continue;
         }
         basisChanges.push({
@@ -603,7 +604,7 @@ Object.assign(Polyhedron.prototype, {
           faceOut: basis.faces[index],
           faceIn: b.face,
           edge: p.getEdgeFromVertices([basis.vertex,newVertex]),
-          halfEdgePosition: s.clone().multiplyScalar(bestLambda[0] / 2).add(v),
+          cameraMidPosition: basis.vertex.getWorldPosition().addScaledVector(s, bestLambda[0] / 2),
           newVertex: newVertex,
           basisIndexOut: index,
           basis: basis
@@ -731,7 +732,7 @@ Object.assign(Polyhedron.prototype, {
       this.stepState = EDGE_FOUND;
     } else if (this.stepState === EDGE_FOUND) {
       this.basisChange.faceIn.setStatus( "in", true );
-      moveCamera(this.basisChange.halfEdgePosition);
+      moveCamera(this.basisChange.cameraMidPosition);
       this.stepState = BASIS_CHANGE_FOUND;
     } else if (this.stepState === BASIS_CHANGE_FOUND) {
       this.basisChange.faceOut.setStatus( "out", false );
@@ -852,6 +853,11 @@ function onWindowResize() {
 function moveCamera (finalPos, dist, directionRight) {
   //directionRight = polyhedron.direction;
 
+  if (finalPos.lengthSq() === 0) {
+    console.warn("[moveCamera]: finalPos is zero");
+    finalPos.set(1,1,1);
+  }
+
   if (directionRight instanceof THREE.Vector3) {
     directionRight = directionRight.clone().normalize();
   }
@@ -860,10 +866,13 @@ function moveCamera (finalPos, dist, directionRight) {
   if (dist === undefined) {
     dist = camera.position.length();
   }
+  if (dist === 0) dist = 1;
+
   var startPos = camera.position.clone();
   if (startPos.lengthSq() === 0) startPos.set(1,1,1);
   var startUp = camera.up.clone();
   if (startUp.lengthSq() === 0) startUp.set(1,1,1);
+
   if (directionRight) {
     finalPos = finalPos.sub( directionRight.clone().multiplyScalar(finalPos.dot(directionRight)) );
     if (finalPos.lengthSq() === 0) {
@@ -905,7 +914,7 @@ function moveCamera (finalPos, dist, directionRight) {
     camera.position.setLength( this.l );
   })
   .onComplete(function(){
-    camera.position.copy( finalPos ).setLength( dist );
+    //camera.position.copy( finalPos ).setLength( dist );
     //if (finalUp) camera.up.copy( finalUp );
   })
   .start();
